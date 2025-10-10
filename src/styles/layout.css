@@ -1,0 +1,79 @@
+/* Toàn bộ nền theo phong cách bạn đã dùng cho page */
+.app-layout {
+  min-height: 100vh;
+  background: radial-gradient(
+      1200px 600px at 20% 0%,
+      #eef3ff 0%,
+      transparent 60%
+    ),
+    radial-gradient(900px 500px at 100% 0%, #f4f9f2 0%, transparent 60%),
+    linear-gradient(180deg, #f7f9fc 0%, #ffffff 100%);
+}
+
+/* Header thanh tối, có container bên trong để control màu */
+.app-header {
+  padding: 0;
+}
+.app-header .app-header-inner {
+  display: flex;
+  align-items: center;
+  height: 64px;
+  padding: 0 16px;
+  backdrop-filter: saturate(180%) blur(6px);
+}
+
+/* Logo/brand trái */
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  margin-right: 16px;
+}
+.brand-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #1677ff;
+  box-shadow: 0 0 12px rgba(22, 119, 255, 0.8);
+}
+
+/* Khu vực user phải */
+.app-user {
+  display: flex;
+  align-items: center;
+  margin-left: 16px;
+}
+.app-user-info {
+  cursor: pointer;
+}
+.app-username {
+  font-weight: 600;
+}
+
+/* Khối chính dưới header */
+.app-main {
+  padding: 0 48px;
+}
+
+/* Breadcrumb */
+.app-breadcrumb {
+  margin-top: 16px;
+}
+
+/* Vùng shell (Sider + Content) */
+.app-shell {
+  padding: 16px 0;
+  display: flex;
+  gap: 24px;
+  background: transparent; /* tránh dính nền chung */
+}
+
+/* Tinh chỉnh nhẹ Ant Design */
+.ant-menu {
+  border-inline-end: none !important;
+}
+
+
+
+

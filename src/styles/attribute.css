@@ -1,0 +1,19 @@
+.attribute-container {
+  padding: 24px;
+}
+
+.attribute-card {
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.attribute-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.attribute-header h2 {
+  margin: 0;
+}

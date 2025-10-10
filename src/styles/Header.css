@@ -1,0 +1,35 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.header-logo {
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.header-menu {
+  flex: 1;
+  justify-content: center;
+  display: flex;
+}
+
+.header-user {
+  display: flex;
+  align-items: center;
+}
+
+.header-user-info {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.header-username {
+  margin-left: 8px;
+}
