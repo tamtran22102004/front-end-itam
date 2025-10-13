@@ -24,6 +24,7 @@ const router = createBrowserRouter([
             <CategoryPage />
           </PrivateRoute>
         ),
+        
       },
       {
         path: "/category/attribute",

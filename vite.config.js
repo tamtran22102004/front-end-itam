@@ -5,4 +5,5 @@ import react from "@vitejs/plugin-react-swc";
 export default defineConfig({
   plugins: [react()],
   base: "./", // quan trọng để asset load đúng trên vercel
+  build: { outDir: "dist" },
 });
