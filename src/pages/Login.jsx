@@ -11,10 +11,14 @@ const LoginPage = () => {
     try {
       setLoading(true);
 
-      const res = await axios.post(`${API_URL}/api/login`, {
-        email: values.email,
-        password: values.password,
-      });
+      const res = await axios.post(
+        `${API_URL}/api/login`,
+        {
+          email: values.email,
+          password: values.password,
+        },
+        { withCredentials: true }
+      );
       console.log("Login response:", res.data.data.user);
       message.success(res.data.message || "Đăng nhập thành công!");
 
