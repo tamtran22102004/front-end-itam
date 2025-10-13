@@ -32,6 +32,7 @@ const siderItems = [
         children: [
           { key: "/category", label: "Thêm danh mục" },
           { key: "/category/attribute", label: "Thuộc tính danh mục" },
+          { key: "/category/categoryattribute", label: "Cấu hình danh mục" },
         ],
       },
     ],
