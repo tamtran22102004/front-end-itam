@@ -1,12 +1,5 @@
 import React, { useEffect, useState } from "react";
-import {
-  Button,
-  Table,
-  message,
-  Popconfirm,
-  Space,
-  Card,
-} from "antd";
+import { Button, Table, message, Popconfirm, Space, Card } from "antd";
 import {
   PlusOutlined,
   EditOutlined,
@@ -66,7 +59,7 @@ const AttributePage = () => {
   const handleAdd = async (values, form) => {
     try {
       await axios.post(`${API_BASE}/add`, values);
-      console.log(values)
+      console.log(values);
       message.success("Thêm thành công");
       closeModal();
       form.resetFields();
@@ -126,10 +119,7 @@ const AttributePage = () => {
       width: 150,
       render: (_, record) => (
         <Space>
-          <Button
-            icon={<EditOutlined />}
-            onClick={() => openModal(record)}
-          />
+          <Button icon={<EditOutlined />} onClick={() => openModal(record)} />
           <Popconfirm
             title="Xác nhận xoá?"
             okText="Xóa"
