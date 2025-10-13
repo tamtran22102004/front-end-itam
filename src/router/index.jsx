@@ -9,6 +9,7 @@ import LoginPage from "../pages/Login";
 import RegisterPage from "../pages/Register";
 import CategoryPage from "../pages/Category";
 import AttributePage from "../pages/Attribute";
+import CategoryAttributePage from "../pages/CategoryAttribute"
 const router = createBrowserRouter([
   {
     path: "/",
@@ -24,7 +25,6 @@ const router = createBrowserRouter([
             <CategoryPage />
           </PrivateRoute>
         ),
-        
       },
       {
         path: "/category/attribute",
@@ -34,7 +34,14 @@ const router = createBrowserRouter([
           </PrivateRoute>
         ),
       },
-
+      {
+        path: "/category/categoryattribute",
+        element: (
+          <PrivateRoute>
+            <CategoryAttributePage />
+          </PrivateRoute>
+        ),
+      },
     ],
   },
 ]);
