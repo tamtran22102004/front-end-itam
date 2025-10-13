@@ -14,7 +14,7 @@ import axios from "axios";
 
 const API_URL = import.meta.env.VITE_BACKEND_URL;
 
-export default function AttributeConfigPage() {
+const CategoryAttributePage = () => {
   const [categories, setCategories] = useState([]);
   const [categoryId, setCategoryId] = useState(null);
 
@@ -40,7 +40,7 @@ export default function AttributeConfigPage() {
     try {
       const res = await axios.get(
         `${API_URL}/api/category/${cid}/attribute-config`
-      ,);
+      );
       setRows(res.data?.data || []);
     } catch (e) {
       message.error("Không tải được cấu hình thuộc tính");
@@ -161,4 +161,6 @@ export default function AttributeConfigPage() {
       </Space>
     </Card>
   );
-}
+};
+
+export default CategoryAttributePage
