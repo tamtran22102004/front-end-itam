@@ -35,12 +35,8 @@ const router = createBrowserRouter([
         ),
       },
       {
-        path: "/category/categoryattribute",
-        element: (
-          <PrivateRoute>
-            <CategoryAttributePage />
-          </PrivateRoute>
-        ),
+        path: "/category/categoryattribute",element: <CategoryAttributePage/>
+
       },
     ],
   },
