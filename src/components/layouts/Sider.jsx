@@ -1,35 +1,41 @@
 import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Layout, Menu } from "antd";
-import { LaptopOutlined, NotificationOutlined, UserOutlined, AppstoreOutlined, DatabaseOutlined, SettingOutlined } from "@ant-design/icons";
+import {
+  LaptopOutlined,
+  NotificationOutlined,
+  UserOutlined,
+  AppstoreOutlined,
+  DatabaseOutlined,
+  SettingOutlined,
+} from "@ant-design/icons";
 
 const { Sider } = Layout;
 
 const siderItems = [
-  
   {
-  key: "sub2",
-  icon: <LaptopOutlined />,
-  label: "Thiết bị",
-  children: [
-    {
-      key: "assets",
-      label: "Tài sản",
-      children: [
-        { key: "/assets/add", label: "Thêm tài sản" },
-        { key: "/assets/list", label: "Tài sản" },
-      ],
-    },
-    {
-      key: "category",
-      label: "Danh mục",
-      children: [
-        { key: "/category/", label: "Thêm danh mục" },
-        { key: "/category/attribute/", label: "Thuộc tính danh mục" },
-      ],
-    },
-  ],
-},
+    key: "sub2",
+    icon: <LaptopOutlined />,
+    label: "Thiết bị",
+    children: [
+      {
+        key: "assets",
+        label: "Tài sản",
+        children: [
+          { key: "/assets/add", label: "Thêm tài sản" },
+          { key: "/assets/list", label: "Tài sản" },
+        ],
+      },
+      {
+        key: "category",
+        label: "Danh mục",
+        children: [
+          { key: "/category", label: "Thêm danh mục" },
+          { key: "/category/attribute", label: "Thuộc tính danh mục" },
+        ],
+      },
+    ],
+  },
 
   {
     key: "sub3",
@@ -62,9 +68,7 @@ const siderItems = [
     key: "sub6",
     icon: <NotificationOutlined />,
     label: "Thông báo",
-    children: [
-      { key: "/notifications", label: "Tất cả" },
-    ],
+    children: [{ key: "/notifications", label: "Tất cả" }],
   },
 ];
 
@@ -73,9 +77,10 @@ const SiderNav = ({ collapsedWidth = 64, width = 220 }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const defaultOpenKey = siderItems.find((group) =>
-    group.children?.some((c) => location.pathname.startsWith(c.key))
-  )?.key || "sub2";
+  const defaultOpenKey =
+    siderItems.find((group) =>
+      group.children?.some((c) => location.pathname.startsWith(c.key))
+    )?.key || "sub2";
 
   return (
     <Sider
