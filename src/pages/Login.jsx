@@ -17,7 +17,7 @@ const LoginPage = () => {
           email: values.email,
           password: values.password,
         },
-        { withCredentials: true }
+        { withCredentials: true } // ✅ đây là object cấu hình, không phải ngoặc riêng
       );
       console.log("Login response:", res.data.data.user);
       message.success(res.data.message || "Đăng nhập thành công!");

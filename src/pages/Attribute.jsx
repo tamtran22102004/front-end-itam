@@ -65,7 +65,7 @@ const AttributePage = () => {
   // 🔹 Thêm mới
   const handleAdd = async (values, form) => {
     try {
-      await axios.post(`${API_BASE}/attribute/add`, values);
+      await axios.post(`${API_BASE}/add`, values);
       console.log(values)
       message.success("Thêm thành công");
       closeModal();
@@ -80,7 +80,7 @@ const AttributePage = () => {
   // 🔹 Cập nhật
   const handleUpdate = async (values, form) => {
     try {
-      await axios.post(`${API_BASE}/attribute/update/${editing.ID}`, {
+      await axios.post(`${API_BASE}/update/${editing.ID}`, {
         id: editing.ID,
         ...values,
       });
@@ -97,7 +97,7 @@ const AttributePage = () => {
   // 🔹 Xóa
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`${API_BASE}/attribute/delete/${id}`);
+      await axios.delete(`${API_BASE}/delete/${id}`);
       message.success("Đã xóa");
       setAttributes((prev) => prev.filter((a) => a.ID !== id));
     } catch (err) {
