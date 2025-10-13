@@ -12,14 +12,14 @@ import AttributePage from "../pages/Attribute";
 import CategoryAttributePage from "../pages/CategoryAttribute";
 const router = createBrowserRouter([
   {
-    path: "",
+    path: "/",
     element: <AppLayout />,
     children: [
-      { path: "/home", element: <HomePage /> },
-      { path: "/login", element: <LoginPage /> },
-      { path: "/register", element: <RegisterPage /> },
+      { path: "home", element: <HomePage /> },
+      { path: "login", element: <LoginPage /> },
+      { path: "register", element: <RegisterPage /> },
       {
-        path: "/category",
+        path: "category",
         element: (
           <PrivateRoute>
             <CategoryPage />
@@ -27,7 +27,7 @@ const router = createBrowserRouter([
         ),
       },
       {
-        path: "/category/attribute",
+        path: "category/attribute",
         element: (
           <PrivateRoute>
             <AttributePage />
@@ -35,8 +35,12 @@ const router = createBrowserRouter([
         ),
       },
       {
-        path: "/category/categoryattribute",element: <CategoryAttributePage/>
-
+        path: "category/categoryattribute",
+        element: (
+          <PrivateRoute>
+            <CategoryAttributePage />
+          </PrivateRoute>
+        ),
       },
     ],
   },
