@@ -11,6 +11,7 @@ import CategoryPage from "../pages/Category";
 import AttributePage from "../pages/Attribute";
 import CategoryAttributePage from "../pages/CategoryAttribute";
 import ItemMasterPage from "../pages/ItemMaster";
+import AssetPage from "../pages/Asset";
 const router = createBrowserRouter([
   {
     path: "/",
@@ -48,6 +49,14 @@ const router = createBrowserRouter([
         element: (
           <PrivateRoute>
             < ItemMasterPage/>
+          </PrivateRoute>
+        ),
+      },
+      {
+        path: "asset",
+        element: (
+          <PrivateRoute>
+            < AssetPage/>
           </PrivateRoute>
         ),
       },

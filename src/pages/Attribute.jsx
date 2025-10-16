@@ -1,5 +1,15 @@
 import React, { useEffect, useState } from "react";
-import { Button, Table, message, Popconfirm, Space, Card } from "antd";
+import {
+  Button,
+  Table,
+  message,
+  Popconfirm,
+  Space,
+  Card,
+  Modal,
+  Form,
+  Input,
+} from "antd";
 import {
   PlusOutlined,
   EditOutlined,
@@ -7,20 +17,17 @@ import {
   ReloadOutlined,
 } from "@ant-design/icons";
 import axios from "axios";
-import AttributeForm from "../components/form/AttributeForm";
-import "../styles/attribute.css";
 
+const { Search } = Input;
 const API_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/attribute`;
 
 const AttributePage = () => {
+  const [form] = Form.useForm();
   const [attributes, setAttributes] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [openModal, setOpenModal] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [pagination, setPagination] = useState({
-    current: 1,
-    pageSize: 6,
-  });
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 6 });
 
   // 🔹 Lấy danh sách thuộc tính
   const fetchAttributes = async () => {
@@ -43,47 +50,23 @@ const AttributePage = () => {
     fetchAttributes();
   }, []);
 
-  // 🔹 Mở Modal (thêm/sửa)
-  const openModal = (record = null) => {
-    setEditing(record);
-    setIsModalOpen(true);
-  };
-
-  // 🔹 Đóng Modal
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setEditing(null);
-  };
-
-  // 🔹 Thêm mới
-  const handleAdd = async (values, form) => {
+  // 🔹 Submit form (add / update)
+  const onFinish = async (values) => {
     try {
-      await axios.post(`${API_BASE}/add`, values);
-      console.log(values);
-      message.success("Thêm thành công");
-      closeModal();
+      if (editing) {
+        await axios.post(`${API_BASE}/update/${editing.ID}`, values);
+        message.success("Cập nhật thành công");
+      } else {
+        await axios.post(`${API_BASE}/add`, values);
+        message.success("Thêm thuộc tính thành công");
+      }
+      setOpenModal(false);
       form.resetFields();
+      setEditing(null);
       fetchAttributes();
     } catch (err) {
       console.error(err);
-      message.error("Thêm thất bại");
-    }
-  };
-
-  // 🔹 Cập nhật
-  const handleUpdate = async (values, form) => {
-    try {
-      await axios.post(`${API_BASE}/update/${editing.ID}`, {
-        id: editing.ID,
-        ...values,
-      });
-      message.success("Cập nhật thành công");
-      closeModal();
-      form.resetFields();
-      fetchAttributes();
-    } catch (err) {
-      console.error(err);
-      message.error("Cập nhật thất bại");
+      message.error("Không thể lưu thuộc tính");
     }
   };
 
@@ -92,7 +75,7 @@ const AttributePage = () => {
     try {
       await axios.delete(`${API_BASE}/delete/${id}`);
       message.success("Đã xóa");
-      setAttributes((prev) => prev.filter((a) => a.ID !== id));
+      fetchAttributes();
     } catch (err) {
       console.error(err);
       message.error("Xóa thất bại");
@@ -104,7 +87,7 @@ const AttributePage = () => {
       title: "Tên thuộc tính",
       dataIndex: "Name",
       key: "Name",
-      render: (text) => <b>{text}</b>,
+      render: (text) => text,
     },
     {
       title: "Đơn vị đo",
@@ -113,13 +96,20 @@ const AttributePage = () => {
       render: (text) => text || <span style={{ color: "#999" }}>—</span>,
     },
     {
-      title: "Sửa / Xóa",
+      title: "Thao tác",
       key: "actions",
       align: "center",
       width: 150,
       render: (_, record) => (
         <Space>
-          <Button icon={<EditOutlined />} onClick={() => openModal(record)} />
+          <Button
+            icon={<EditOutlined />}
+            onClick={() => {
+              setEditing(record);
+              form.setFieldsValue(record);
+              setOpenModal(true);
+            }}
+          />
           <Popconfirm
             title="Xác nhận xoá?"
             okText="Xóa"
@@ -134,55 +124,87 @@ const AttributePage = () => {
   ];
 
   return (
-    <div className="attribute-container">
-      <Card bordered={false} className="attribute-card">
-        <div className="attribute-header">
-          <h2>Quản lý thuộc tính</h2>
-          <Space>
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={fetchAttributes}
-              style={{ borderRadius: 8 }}
-            >
-              Làm mới
-            </Button>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => openModal()}
-              style={{ borderRadius: 8 }}
-            >
-              Thêm thuộc tính
-            </Button>
-          </Space>
-        </div>
-
-        <Table
-          rowKey="ID"
-          bordered
-          columns={columns}
-          dataSource={attributes}
-          loading={loading}
-          pagination={{
-            ...pagination,
-            total: attributes.length,
-            onChange: (page, pageSize) =>
-              setPagination({ current: page, pageSize }),
-            showSizeChanger: true,
-            pageSizeOptions: ["5", "10", "20"],
-          }}
-        />
-      </Card>
-
-      {/* Form riêng */}
-      <AttributeForm
-        open={isModalOpen}
-        editing={editing}
-        onCancel={closeModal}
-        onAdd={handleAdd}
-        onUpdate={handleUpdate}
+    <Card
+      title="Quản lý Thuộc tính (Attribute)"
+      extra={
+        <Space>
+          <Button icon={<ReloadOutlined />} onClick={fetchAttributes}>
+            Làm mới
+          </Button>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              setEditing(null);
+              form.resetFields();
+              setOpenModal(true);
+            }}
+          >
+            Thêm mới
+          </Button>
+        </Space>
+      }
+    >
+      {/* Bảng dữ liệu */}
+      <Table
+        rowKey="ID"
+        bordered
+        columns={columns}
+        dataSource={attributes}
+        loading={loading}
+        pagination={{
+          ...pagination,
+          total: attributes.length,
+          onChange: (page, pageSize) =>
+            setPagination({ current: page, pageSize }),
+          showSizeChanger: true,
+          pageSizeOptions: ["5", "10", "20"],
+        }}
       />
-    </div>
+
+      {/* Modal thêm / sửa */}
+      <Modal
+        title={editing ? "Cập nhật thuộc tính" : "Thêm thuộc tính mới"}
+        open={openModal}
+        onCancel={() => {
+          setOpenModal(false);
+          setEditing(null);
+        }}
+        footer={null}
+        destroyOnClose
+        width={500}
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={onFinish}
+          autoComplete="off"
+        >
+          <Form.Item
+            label="Tên thuộc tính"
+            name="Name"
+            rules={[{ required: true, message: "Vui lòng nhập tên thuộc tính" }]}
+          >
+            <Input placeholder="VD: RAM, CPU, Kích thước màn hình..." />
+          </Form.Item>
+
+          <Form.Item
+            label="Đơn vị đo"
+            name="MeasurementUnit"
+            tooltip="Không bắt buộc (VD: GB, GHz, inch...)"
+          >
+            <Input placeholder="VD: GB, Hz, inch..." />
+          </Form.Item>
+
+          <Form.Item style={{ textAlign: "right" }}>
+            <Button onClick={() => setOpenModal(false)}>Hủy</Button>
+            <Button type="primary" htmlType="submit" style={{ marginLeft: 8 }}>
+              {editing ? "Cập nhật" : "Lưu"}
+            </Button>
+          </Form.Item>
+        </Form>
+      </Modal>
+    </Card>
   );
 };
 
