@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Button,
   Table,
@@ -9,6 +9,7 @@ import {
   Modal,
   Form,
   Input,
+  Select,
 } from "antd";
 import {
   PlusOutlined,
@@ -18,7 +19,7 @@ import {
 } from "@ant-design/icons";
 import axios from "axios";
 
-const { Search } = Input;
+const { Option } = Select;
 const API_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/attribute`;
 
 const AttributePage = () => {
@@ -27,9 +28,15 @@ const AttributePage = () => {
   const [loading, setLoading] = useState(false);
   const [openModal, setOpenModal] = useState(false);
   const [editing, setEditing] = useState(null);
+
+  // Pagination state tách riêng để control khi lọc
   const [pagination, setPagination] = useState({ current: 1, pageSize: 6 });
 
-  // 🔹 Lấy danh sách thuộc tính
+  // ====== FILTER STATE (mới) ======
+  const [kw, setKw] = useState("");          // từ khóa tìm kiếm
+  const [unit, setUnit] = useState(null);    // đơn vị đo được chọn
+
+  // Lấy danh sách thuộc tính
   const fetchAttributes = async () => {
     setLoading(true);
     try {
@@ -50,7 +57,35 @@ const AttributePage = () => {
     fetchAttributes();
   }, []);
 
-  // 🔹 Submit form (add / update)
+  // ====== Tập đơn vị đo duy nhất cho Select filter ======
+  const unitOptions = useMemo(() => {
+    const set = new Set(
+      (attributes || [])
+        .map((a) => (a.MeasurementUnit || "").trim())
+        .filter(Boolean)
+    );
+    return Array.from(set);
+  }, [attributes]);
+
+  // ====== Áp dụng filter client-side ======
+  const filteredData = useMemo(() => {
+    const q = kw.trim().toLowerCase();
+    return (attributes || []).filter((a) => {
+      const byKw = !q
+        ? true
+        : (a.Name || "").toLowerCase().includes(q) ||
+          (a.MeasurementUnit || "").toLowerCase().includes(q);
+      const byUnit = !unit ? true : (a.MeasurementUnit || "") === unit;
+      return byKw && byUnit;
+    });
+  }, [attributes, kw, unit]);
+
+  // Reset về trang 1 mỗi khi thay đổi filter
+  useEffect(() => {
+    setPagination((p) => ({ ...p, current: 1 }));
+  }, [kw, unit]);
+
+  // Submit form (add / update)
   const onFinish = async (values) => {
     try {
       if (editing) {
@@ -70,7 +105,7 @@ const AttributePage = () => {
     }
   };
 
-  // 🔹 Xóa
+  // Xóa
   const handleDelete = async (id) => {
     try {
       await axios.delete(`${API_BASE}/delete/${id}`);
@@ -94,6 +129,7 @@ const AttributePage = () => {
       dataIndex: "MeasurementUnit",
       key: "MeasurementUnit",
       render: (text) => text || <span style={{ color: "#999" }}>—</span>,
+      width: 200,
     },
     {
       title: "Thao tác",
@@ -123,11 +159,17 @@ const AttributePage = () => {
     },
   ];
 
+  // Nút bỏ lọc
+  const clearFilters = () => {
+    setKw("");
+    setUnit(null);
+  };
+
   return (
     <Card
       title="Quản lý Thuộc tính (Attribute)"
       extra={
-        <Space>
+        <Space wrap>
           <Button icon={<ReloadOutlined />} onClick={fetchAttributes}>
             Làm mới
           </Button>
@@ -145,16 +187,51 @@ const AttributePage = () => {
         </Space>
       }
     >
+      {/* ====== Thanh lọc (filter bar) ====== */}
+      <div
+        style={{
+          marginBottom: 12,
+          display: "flex",
+          gap: 8,
+          flexWrap: "wrap",
+          alignItems: "center",
+        }}
+      >
+        <Input.Search
+          allowClear
+          value={kw}
+          onChange={(e) => setKw(e.target.value)}
+          onSearch={(v) => setKw(v)}
+          placeholder="Tìm theo tên hoặc đơn vị đo…"
+          style={{ width: 320 }}
+        />
+
+        <Select
+          allowClear
+          value={unit}
+          onChange={setUnit}
+          placeholder="Lọc theo đơn vị đo"
+          style={{ width: 220 }}
+          options={unitOptions.map((u) => ({ value: u, label: u }))}
+        />
+
+        <Button onClick={clearFilters}>Bỏ lọc</Button>
+
+        <div style={{ marginLeft: "auto", opacity: 0.7 }}>
+          Hiển thị {filteredData.length}/{attributes.length}
+        </div>
+      </div>
+
       {/* Bảng dữ liệu */}
       <Table
         rowKey="ID"
         bordered
         columns={columns}
-        dataSource={attributes}
+        dataSource={filteredData}
         loading={loading}
         pagination={{
           ...pagination,
-          total: attributes.length,
+          total: filteredData.length,
           onChange: (page, pageSize) =>
             setPagination({ current: page, pageSize }),
           showSizeChanger: true,

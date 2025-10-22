@@ -12,6 +12,8 @@ import AttributePage from "../pages/Attribute";
 import CategoryAttributePage from "../pages/CategoryAttribute";
 import ItemMasterPage from "../pages/ItemMaster";
 import AssetPage from "../pages/Asset";
+import AssetConfigPage from "../pages/AssetConfig";
+import AssetDetailPage from "../pages/AssetDetail";
 const router = createBrowserRouter([
   {
     path: "/",
@@ -57,6 +59,22 @@ const router = createBrowserRouter([
         element: (
           <PrivateRoute>
             < AssetPage/>
+          </PrivateRoute>
+        ),
+      },
+      {
+        path: "assetconfig",
+        element: (
+          <PrivateRoute>
+            < AssetConfigPage/>
+          </PrivateRoute>
+        ),
+      },
+      {
+        path: "assetdetail/:id",
+        element: (
+          <PrivateRoute>
+            < AssetDetailPage/>
           </PrivateRoute>
         ),
       },

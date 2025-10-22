@@ -22,8 +22,9 @@ const siderItems = [
         key: "assets",
         label: "Tài sản",
         children: [
-          { key: "/item", label: "Cấu hình tài sản" },
+          { key: "/item", label: "Mẫu tài sản" },
           { key: "/asset", label: "Tài sản" },
+          { key: "/assetconfig", label: "Cấu hình tài sản" },
         ],
       },
       {

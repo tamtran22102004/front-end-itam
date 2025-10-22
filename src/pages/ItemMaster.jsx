@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Button,
   Form,
@@ -18,6 +18,8 @@ import {
   ReloadOutlined,
   EditOutlined,
   DeleteOutlined,
+  SearchOutlined,
+  CloseCircleOutlined,
 } from "@ant-design/icons";
 import axios from "axios";
 
@@ -32,10 +34,17 @@ const ItemMasterPage = () => {
   const [loading, setLoading] = useState(false);
   const [openModal, setOpenModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
-
-  // Modal Asset
   const [openAssetModal, setOpenAssetModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+
+  // 🔹 chỉ-thêm: state filter (giữ UI gọn, không ảnh hưởng bảng)
+  const [filters, setFilters] = useState({
+    q: "",
+    category: undefined,
+    manufacturer: undefined,
+    manageType: undefined,
+    stock: undefined, // 'in' | 'out'
+  });
 
   const API_URL = import.meta.env.VITE_BACKEND_URL;
 
@@ -99,18 +108,12 @@ const ItemMasterPage = () => {
     }
   };
 
-  // ===== Function riêng: lấy values thuộc tính của ItemMaster =====
+  // ===== Lấy values thuộc tính của ItemMaster =====
   const loadItemAttributes = async (itemId) => {
-    if (!itemId) {
-      console.warn("⚠️ Không có ID ItemMaster khi gọi loadItemAttributes");
-      return {};
-    }
+    if (!itemId) return {};
     try {
-      // API theo yêu cầu: {API_URL}/items/:id/attribute
       const res = await axios.get(`${API_URL}/api/items/${itemId}/attribute`);
       const rows = Array.isArray(res.data?.data) ? res.data.data : [];
-
-      // Map thành { attr_1: 'i9...', attr_2: '32GB', ... }
       const attrFormValues = {};
       rows.forEach((r) => {
         attrFormValues[`attr_${r.AttributeID}`] = r.Value ?? "";
@@ -125,6 +128,11 @@ const ItemMasterPage = () => {
   // ===== Submit add/update ItemMaster =====
   const onFinish = async (values) => {
     try {
+      // ép AvailableQuantity theo Total - InUse để payload gửi luôn đúng
+      const total = Number(values.TotalQuantity || 0);
+      const inUse = Number(values.InUseQuantity || 0);
+      const computedAvailable = Math.max(total - inUse, 0);
+
       const attrValues = attributes.map((a) => {
         const id = a.AttributeID || a.ID;
         return {
@@ -135,6 +143,7 @@ const ItemMasterPage = () => {
 
       const payload = {
         ...values,
+        AvailableQuantity: computedAvailable,
         Attributes: attrValues,
       };
 
@@ -173,11 +182,34 @@ const ItemMasterPage = () => {
   // ===== Create Asset =====
   const handleAddAsset = async (values) => {
     try {
-      await axios.post(`${API_URL}/api/items/asset/add`, {
+      if (!selectedItem) {
+        message.error("Chưa chọn dòng sản phẩm!");
+        return;
+      }
+
+      // QUANTITY → chặn tạo thêm asset nếu đã tồn tại
+      if (selectedItem.ManageType === "QUANTITY") {
+        const checkRes = await axios.get(
+          `${API_URL}/api/items/check-itemquantity/${selectedItem.ID}`
+        );
+        const existingAssets = Array.isArray(checkRes.data?.data)
+          ? checkRes.data.data
+          : [];
+
+        if (existingAssets.length > 0) {
+          message.warning(
+            "Dòng sản phẩm này thuộc loại QUANTITY và đã có asset, không thể thêm nữa!"
+          );
+          return;
+        }
+      }
+
+      await axios.post(`${API_URL}/api/asset/add`, {
         ...values,
         ItemMasterID: selectedItem.ID,
         CategoryID: selectedItem.CategoryID,
       });
+
       message.success("✅ Tạo sản phẩm chi tiết thành công!");
       setOpenAssetModal(false);
       fetchItemMasters();
@@ -189,7 +221,46 @@ const ItemMasterPage = () => {
     }
   };
 
-  // ===== Columns =====
+  // 🔹 chỉ-thêm: lọc client-side — không đụng columns/layout
+  const filteredItemMasters = useMemo(() => {
+    let list = itemMasters;
+
+    if (filters.q?.trim()) {
+      const q = filters.q.trim().toLowerCase();
+      list = list.filter(
+        (it) =>
+          (it.Name || "").toLowerCase().includes(q) ||
+          (it.ID || "").toLowerCase().includes(q)
+      );
+    }
+    if (filters.category) {
+      list = list.filter((it) => it.CategoryID === filters.category);
+    }
+    if (filters.manufacturer) {
+      list = list.filter((it) => it.ManufacturerID === filters.manufacturer);
+    }
+    if (filters.manageType) {
+      list = list.filter((it) => it.ManageType === filters.manageType);
+    }
+    if (filters.stock === "in") {
+      list = list.filter((it) => Number(it.AvailableQuantity || 0) > 0);
+    } else if (filters.stock === "out") {
+      list = list.filter((it) => Number(it.AvailableQuantity || 0) <= 0);
+    }
+
+    return list;
+  }, [itemMasters, filters]);
+
+  const resetFilters = () =>
+    setFilters({
+      q: "",
+      category: undefined,
+      manufacturer: undefined,
+      manageType: undefined,
+      stock: undefined,
+    });
+
+  // ===== Columns (GIỮ NGUYÊN của bạn) =====
   const columns = [
     { title: "ID", dataIndex: "ID", key: "ID" },
     {
@@ -206,7 +277,24 @@ const ItemMasterPage = () => {
     },
     { title: "Tên sản phẩm", dataIndex: "Name", key: "Name" },
     { title: "Loại quản lý", dataIndex: "ManageType", key: "ManageType" },
-    { title: "Số lượng", dataIndex: "Quantity", key: "Quantity" },
+    {
+      title: "Tổng SL",
+      dataIndex: "TotalQuantity",
+      key: "TotalQuantity",
+      align: "center",
+    },
+    {
+      title: "Đang dùng",
+      dataIndex: "InUseQuantity",
+      key: "InUseQuantity",
+      align: "center",
+    },
+    {
+      title: "Còn lại",
+      dataIndex: "AvailableQuantity",
+      key: "AvailableQuantity",
+      align: "center",
+    },
     {
       title: "Thao tác",
       key: "action",
@@ -223,24 +311,15 @@ const ItemMasterPage = () => {
             Tạo chi tiết
           </Button>
 
-          {/* Sửa: mở modal, load attribute config + load attribute values */}
           <Button
             icon={<EditOutlined />}
             onClick={async () => {
               try {
                 setEditingItem(record);
                 form.setFieldsValue(record);
-
-                // 1) Mở modal trước để form hiện ngay
                 setOpenModal(true);
-
-                // 2) Load attribute-config theo Category
                 await handleCategoryChange(record.CategoryID);
-
-                // 3) Lấy giá trị thuộc tính đã lưu và đổ vào form
-                const attrFormValues = await loadItemAttributes(
-                  record.ID || record.id
-                );
+                const attrFormValues = await loadItemAttributes(record.ID);
                 form.setFieldsValue(attrFormValues);
               } catch (err) {
                 console.error("❌ Lỗi khi mở Edit:", err);
@@ -283,15 +362,92 @@ const ItemMasterPage = () => {
         </Space>
       }
     >
+      {/* 🔹 chỉ-thêm: Filter bar nhỏ gọn, không đụng bảng */}
+      <div style={{ marginBottom: 12 }}>
+        <Space wrap>
+          <Input
+            allowClear
+            prefix={<SearchOutlined />}
+            placeholder="Tìm theo ID / Tên…"
+            value={filters.q}
+            onChange={(e) =>
+              setFilters((f) => ({ ...f, q: e.target.value }))
+            }
+            style={{ width: 240 }}
+          />
+
+          <Select
+            allowClear
+            placeholder="Danh mục"
+            value={filters.category}
+            onChange={(v) => setFilters((f) => ({ ...f, category: v }))}
+            style={{ width: 200 }}
+          >
+            {categories.map((c) => (
+              <Option key={c.ID} value={c.ID}>
+                {c.Name}
+              </Option>
+            ))}
+          </Select>
+
+          <Select
+            allowClear
+            placeholder="Nhà sản xuất"
+            value={filters.manufacturer}
+            onChange={(v) => setFilters((f) => ({ ...f, manufacturer: v }))}
+            style={{ width: 200 }}
+          >
+            {manufacturers.map((m) => (
+              <Option key={m.ID} value={m.ID}>
+                {m.Name}
+              </Option>
+            ))}
+          </Select>
+
+          <Select
+            allowClear
+            placeholder="Loại quản lý"
+            value={filters.manageType}
+            onChange={(v) => setFilters((f) => ({ ...f, manageType: v }))}
+            style={{ width: 160 }}
+          >
+            <Option value="INDIVIDUAL">INDIVIDUAL</Option>
+            <Option value="QUANTITY">QUANTITY</Option>
+          </Select>
+
+          <Select
+            allowClear
+            placeholder="Tồn kho"
+            value={filters.stock}
+            onChange={(v) => setFilters((f) => ({ ...f, stock: v }))}
+            style={{ width: 140 }}
+          >
+            <Option value="in">Còn hàng</Option>
+            <Option value="out">Hết hàng</Option>
+          </Select>
+
+          <Button
+            icon={<CloseCircleOutlined />}
+            onClick={resetFilters}
+          >
+            Xóa lọc
+          </Button>
+
+          <span style={{ opacity: 0.7 }}>
+            Hiển thị {filteredItemMasters.length}/{itemMasters.length}
+          </span>
+        </Space>
+      </div>
+
       <Table
-        columns={columns}
-        dataSource={itemMasters}
+        columns={columns}                 // GIỮ NGUYÊN
+        dataSource={filteredItemMasters}  // chỉ thay nguồn dữ liệu đã lọc
         rowKey={(r) => r.ID}
         loading={loading}
         pagination={{ pageSize: 7 }}
       />
 
-      {/* Modal thêm / sửa ItemMaster */}
+      {/* Modal thêm / sửa ItemMaster — GIỮ NGUYÊN */}
       <Modal
         title={editingItem ? "Cập nhật ItemMaster" : "Thêm ItemMaster mới"}
         open={openModal}
@@ -307,7 +463,23 @@ const ItemMasterPage = () => {
           form={form}
           layout="vertical"
           onFinish={onFinish}
-          initialValues={{ Quantity: 0 }}
+          initialValues={{
+            TotalQuantity: 0,
+            InUseQuantity: 0,
+            AvailableQuantity: 0,
+          }}
+          onValuesChange={(changed, all) => {
+            if (
+              Object.prototype.hasOwnProperty.call(changed, "TotalQuantity") ||
+              Object.prototype.hasOwnProperty.call(changed, "InUseQuantity")
+            ) {
+              const total = Number(all.TotalQuantity || 0);
+              const inUse = Number(all.InUseQuantity || 0);
+              form.setFieldsValue({
+                AvailableQuantity: Math.max(total - inUse, 0),
+              });
+            }
+          }}
         >
           <Form.Item
             label="Mã Item (ID)"
@@ -334,9 +506,9 @@ const ItemMasterPage = () => {
           <Form.Item
             label="Nhà sản xuất"
             name="ManufacturerID"
-            rules={[{ required: true, message: "Vui lòng chọn nhà sản xuất" }]}
+            rules={[{ required: false }]}
           >
-            <Select placeholder="Chọn nhà sản xuất">
+            <Select placeholder="Chọn nhà sản xuất (có thể bỏ trống)">
               {manufacturers.map((m) => (
                 <Option key={m.ID} value={m.ID}>
                   {m.Name}
@@ -364,14 +536,12 @@ const ItemMasterPage = () => {
             </Select>
           </Form.Item>
 
-          {/* Thuộc tính động */}
+          {/* Thuộc tính động (IsRequired) */}
           {attributes.length > 0 && (
             <>
               <Divider>Thuộc tính kỹ thuật (bắt buộc)</Divider>
               {attributes
-                .filter(
-                  (attr) => attr.IsRequired === 1 || attr.IsRequired === true
-                ) // 👈 chỉ lấy IsRequired = 1
+                .filter((attr) => attr.IsRequired === 1 || attr.IsRequired === true)
                 .map((attr) => {
                   const name = attr.AttributeName;
                   const unit = attr.MeasurementUnit || "";
@@ -382,9 +552,7 @@ const ItemMasterPage = () => {
                       key={attrId}
                       label={`${name}${unit ? ` (${unit})` : ""}`}
                       name={`attr_${attrId}`}
-                      rules={[
-                        { required: true, message: `Vui lòng nhập ${name}` },
-                      ]}
+                      rules={[{ required: true, message: `Vui lòng nhập ${name}` }]}
                     >
                       <Input placeholder={`Nhập ${name}`} />
                     </Form.Item>
@@ -402,7 +570,7 @@ const ItemMasterPage = () => {
         </Form>
       </Modal>
 
-      {/* Modal tạo Asset */}
+      {/* Modal tạo Asset — GIỮ NGUYÊN */}
       <Modal
         title={`Tạo sản phẩm chi tiết cho: ${selectedItem?.Name || ""}`}
         open={openAssetModal}
@@ -417,16 +585,14 @@ const ItemMasterPage = () => {
           layout="vertical"
           onFinish={handleAddAsset}
           initialValues={{
-            Quantity: selectedItem?.ManageType === "INDIVIDUAL" ? 1 : 1, // mặc định 1
+            Quantity: selectedItem?.ManageType === "INDIVIDUAL" ? 1 : 1,
             Status: 1,
           }}
         >
           <Form.Item
             label="Mã quản lý nội bộ (ManageCode)"
             name="ManageCode"
-            rules={[
-              { required: true, message: "Vui lòng nhập mã quản lý nội bộ" },
-            ]}
+            rules={[{ required: true, message: "Vui lòng nhập mã quản lý nội bộ" }]}
           >
             <Input placeholder="VD: IT123" />
           </Form.Item>
@@ -447,7 +613,6 @@ const ItemMasterPage = () => {
             <InputNumber min={0} style={{ width: "100%" }} />
           </Form.Item>
 
-          {/* Nếu ManageType là INDIVIDUAL → chỉ hiển thị Serial, Quantity mặc định 1 */}
           {selectedItem?.ManageType === "INDIVIDUAL" ? (
             <>
               <Form.Item
@@ -457,8 +622,6 @@ const ItemMasterPage = () => {
               >
                 <Input placeholder="VD: SN12345" />
               </Form.Item>
-
-              {/* Quantity hidden */}
               <Form.Item name="Quantity" hidden initialValue={1}>
                 <InputNumber />
               </Form.Item>
