@@ -34,6 +34,8 @@ const siderItems = [
           { key: "/category", label: "Thêm danh mục" },
           { key: "/category/attribute", label: "Thuộc tính danh mục" },
           { key: "/category/categoryattribute", label: "Cấu hình danh mục" },
+          { key: "/assethistory", label: "Lịch sử tài sản" },
+
         ],
       },
     ],
@@ -42,10 +44,20 @@ const siderItems = [
   {
     key: "sub3",
     icon: <DatabaseOutlined />,
-    label: "Kho & Kiểm kê",
+    label: "Yêu cầu & Duyệt",
     children: [
-      { key: "/stocktake/sessions", label: "Phiên kiểm kê" },
-      { key: "/stocktake/new", label: "Tạo phiên" },
+      {
+        key: "request",
+        label: "Yêu cầu",
+        children: [{ key: "/request", label: "Mẫu yêu cầu" }],
+      },
+      {
+        key: "Approval",
+        label: "Duyệt yêu cầu",
+        children: [
+          { key: "/requestapproval", label: " Cấp phát" },
+        ],
+      },
     ],
   },
   {

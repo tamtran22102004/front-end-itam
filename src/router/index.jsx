@@ -14,6 +14,9 @@ import ItemMasterPage from "../pages/ItemMaster";
 import AssetPage from "../pages/Asset";
 import AssetConfigPage from "../pages/AssetConfig";
 import AssetDetailPage from "../pages/AssetDetail";
+import AllocationApprovalPage from "../pages/AllocationApproval";
+import RequestPage from "../pages/Request";
+import AssetHistoryPage from "../pages/AssetHistory";
 const router = createBrowserRouter([
   {
     path: "/",
@@ -75,6 +78,30 @@ const router = createBrowserRouter([
         element: (
           <PrivateRoute>
             < AssetDetailPage/>
+          </PrivateRoute>
+        ),
+      },
+      {
+        path: "requestapproval",
+        element: (
+          <PrivateRoute>
+            < AllocationApprovalPage/>
+          </PrivateRoute>
+        ),
+      },
+      {
+        path: "request",
+        element: (
+          <PrivateRoute>
+            < RequestPage/>
+          </PrivateRoute>
+        ),
+      },
+      {
+        path: "assethistory",
+        element: (
+          <PrivateRoute>
+            < AssetHistoryPage/>
           </PrivateRoute>
         ),
       },
