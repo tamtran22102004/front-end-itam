@@ -25,6 +25,7 @@ const siderItems = [
           { key: "/item", label: "Mẫu tài sản" },
           { key: "/asset", label: "Tài sản" },
           { key: "/assetconfig", label: "Cấu hình tài sản" },
+          { key: "/assethistory", label: "Lịch sử tài sản" },
         ],
       },
       {
@@ -34,8 +35,6 @@ const siderItems = [
           { key: "/category", label: "Thêm danh mục" },
           { key: "/category/attribute", label: "Thuộc tính danh mục" },
           { key: "/category/categoryattribute", label: "Cấu hình danh mục" },
-          { key: "/assethistory", label: "Lịch sử tài sản" },
-
         ],
       },
     ],
@@ -56,6 +55,7 @@ const siderItems = [
         label: "Duyệt yêu cầu",
         children: [
           { key: "/requestapproval", label: " Cấp phát" },
+          { key: "/requestmaintenance", label: " Bảo trì" },
         ],
       },
     ],

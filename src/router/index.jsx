@@ -4,7 +4,7 @@ import { createBrowserRouter } from "react-router-dom";
 import App from "../App";
 import PrivateRoute from "../components/PrivateRoute";
 import AppLayout from "../components/layouts/AppLayout";
-import HomePage from "../pages/Home";
+import MaintenanceApprovalPage from "../pages/MaintenanceApproval";
 import LoginPage from "../pages/Login";
 import RegisterPage from "../pages/Register";
 import CategoryPage from "../pages/Category";
@@ -22,7 +22,7 @@ const router = createBrowserRouter([
     path: "/",
     element: <AppLayout />,
     children: [
-      { path: "home", element: <HomePage /> },
+      
       { path: "login", element: <LoginPage /> },
       { path: "register", element: <RegisterPage /> },
       {
@@ -104,6 +104,11 @@ const router = createBrowserRouter([
             < AssetHistoryPage/>
           </PrivateRoute>
         ),
+      },
+      { path: "requestmaintenance", element:
+        <PrivateRoute>
+          <MaintenanceApprovalPage />
+        </PrivateRoute>
       },
     ],
   },

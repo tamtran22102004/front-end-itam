@@ -238,37 +238,7 @@ export default function AssetHistoryPage() {
       onFilter: (v, r) =>
         String(r.Type).toUpperCase() === String(v).toUpperCase(),
     },
-    {
-      title: "Yêu cầu",
-      key: "Request",
-      width: 220,
-      render: (r) => (
-        <Space size={6} wrap>
-          {r.RequestID ? (
-            <>
-              <Tooltip title={`RequestID: ${r.RequestID}`}>
-                <Text code copyable={{ text: String(r.RequestID) }}>
-                  {r.RequestID}
-                </Text>
-              </Tooltip>
-              {r.RequestTypeName ? (
-                <Tag color="processing">{r.RequestTypeName}</Tag>
-              ) : null}
-              <Button
-                size="small"
-                type="link"
-                style={{ padding: 0 }}
-                onClick={() => navigate(`/request/${r.RequestID}`)}
-              >
-                Xem yêu cầu
-              </Button>
-            </>
-          ) : (
-            <span>—</span>
-          )}
-        </Space>
-      ),
-    },
+    
     {
       title: "Từ (From)",
       key: "from",
