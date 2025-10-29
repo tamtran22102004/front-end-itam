@@ -33,7 +33,7 @@ import {
 import axios from "axios";
 import dayjs from "dayjs";
 import { useParams, useNavigate } from "react-router-dom";
-
+import AssetQrSection from "../components/form/AssetQrSection";
 const { Option } = Select;
 
 // --- JS thuần, KHÔNG TypeScript annotation ---
@@ -480,6 +480,7 @@ const AssetDetailPage = () => {
 
   return (
     <div className="p-4">
+      
       <Card
         title={
           <Space wrap>
@@ -897,6 +898,7 @@ const AssetDetailPage = () => {
           </Row>
         </Form>
       </Modal>
+      
     </div>
   );
 };

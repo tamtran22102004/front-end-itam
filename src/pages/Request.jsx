@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Card, Form, Input, InputNumber, Select, Button, Space, Tag, message, Tooltip,
-  Typography, Divider, Descriptions, Alert, Spin, Badge, Progress, List
+  Typography, Divider, Alert, Spin, Badge, Progress, List
 } from "antd";
 import {
   SendOutlined, RedoOutlined, ReloadOutlined, InfoCircleOutlined,
@@ -16,9 +16,11 @@ const API_URL = import.meta.env.VITE_BACKEND_URL;
 const CREATE_BASE       = `${API_URL}/api/request/createrequest`;
 const ASSET_LIST_BASE   = `${API_URL}/api/asset`;
 const ASSET_DETAIL_BASE = `${API_URL}/api/asset/assetdetail`; // + /:id
+const USERS_API         = `${API_URL}/api/getuserinfo`;
+const DEPT_API          = `${API_URL}/api/getdepartment`;
 
 const REQUEST_TYPES = [
-  { value: "ALLOCATION", label: (<><DatabaseOutlined /> Allocation (Cấp phát)</>) },
+  { value: "ALLOCATION",  label: (<><DatabaseOutlined /> Allocation (Cấp phát)</>) },
   { value: "MAINTENANCE", label: (<><ToolOutlined /> Maintenance (Bảo trì)</>) },
   { value: "DISPOSAL",    label: (<><DeleteOutlined /> Disposal (Thanh lý)</>) },
   { value: "WARRANTY",    label: (<><SafetyOutlined /> Warranty (Bảo hành)</>) },
@@ -82,7 +84,7 @@ const disallowReasonByType = (type, status, assetDetailAsset) => {
       return null;
     case "MAINTENANCE":
       if ([STATUS.DISPOSED, STATUS.MAINTENANCE_OUT, STATUS.WARRANTY_OUT].includes(s)) return "Thiết bị không hợp lệ cho bảo trì.";
-      if (isWarrantyActive(assetDetailAsset?.WarrantyStartDate, assetDetailAsset?.WarrantyEndDate)) return "Thiết bị còn hạn bảo hành — hãy tạo WARRANTY.";
+      if (isWarrantyActive(assetDetailAsset?.WarrantyStartDate, assetDetailAsset?.WarrantyEndDate)) return "Thiết bị còn bảo hành — hãy tạo WARRANTY.";
       return null;
     case "WARRANTY":
       if ([STATUS.DISPOSED, STATUS.WARRANTY_OUT].includes(s)) return "Thiết bị không hợp lệ cho bảo hành.";
@@ -163,8 +165,16 @@ export default function RequestCreatePage() {
   const [assetDetail, setAssetDetail] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
+  const [users, setUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  const [departments, setDepartments] = useState([]);
+  const [loadingDepts, setLoadingDepts] = useState(false);
+
   const type = Form.useWatch("type", form);
   const selectedAssetId = Form.useWatch("AssetID", form);
+  const watchTargetUserId = Form.useWatch("TargetUserID", form);
+  const watchTargetDeptId = Form.useWatch("TargetDepartmentID", form);
 
   useEffect(() => {
     try {
@@ -186,6 +196,47 @@ export default function RequestCreatePage() {
   };
   useEffect(() => { fetchAssets(); }, []);
 
+  const fetchUsers = async () => {
+    setLoadingUsers(true);
+    try {
+      const resp = await axios.get(USERS_API, withAuth());
+      const raw = Array.isArray(resp?.data?.data)
+        ? resp.data.data
+        : Array.isArray(resp?.data) ? resp.data : [];
+      setUsers(
+        raw.map(u => ({
+          value: Number(u.UserID),
+          label: u.FullName || `User ${u.UserID}`,
+          DepartmentID: u.DepartmentID ?? null,
+          raw: u,
+        }))
+      );
+    } catch (e) {
+      message.error(e?.response?.data?.message || "Không tải được danh sách người dùng");
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+  useEffect(() => { fetchUsers(); }, []);
+
+  const fetchDepartments = async () => {
+    setLoadingDepts(true);
+    try {
+      const resp = await axios.get(DEPT_API, withAuth());
+      const arr = Array.isArray(resp?.data?.data) ? resp.data.data
+                : Array.isArray(resp?.data) ? resp.data : [];
+      setDepartments(arr.map(d => ({
+        value: Number(d.DepartmentID ?? d.id),
+        label: d.DepartmentName ?? d.name ?? `Dept ${d.DepartmentID}`,
+      })));
+    } catch (e) {
+      message.error(e?.response?.data?.message || "Không tải được danh sách phòng ban");
+    } finally {
+      setLoadingDepts(false);
+    }
+  };
+  useEffect(() => { fetchDepartments(); }, []);
+
   const fetchDetail = async (id) => {
     if (!id) { setAssetDetail(null); return null; }
     setLoadingDetail(true);
@@ -203,7 +254,7 @@ export default function RequestCreatePage() {
     }
   };
 
-  // khi chọn asset → fetch detail và kiểm tra strict
+  // Chọn asset → fetch detail + strict validate + clamp qty
   useEffect(() => {
     (async () => {
       if (!selectedAssetId) { setAssetDetail(null); return; }
@@ -217,17 +268,15 @@ export default function RequestCreatePage() {
         message.error(reason);
         return;
       }
-      // clamp số lượng theo tồn của asset mỗi lần đổi Asset
-      if (form.getFieldValue("type") === "ALLOCATION") {
-        const maxQty = Number(detail.asset.Quantity || lite?.Quantity || 1) || 1;
-        const cur = Number(form.getFieldValue("Quantity") || 1);
-        form.setFieldValue("Quantity", Math.min(Math.max(cur, 1), maxQty));
-      }
+      // clamp số lượng cho MỌI loại
+      const mx = Number(detail.asset.Quantity || lite?.Quantity || 1) || 1;
+      const cur = Number(form.getFieldValue("Quantity") || 1);
+      form.setFieldValue("Quantity", clamp(cur, 1, mx));
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAssetId]);
 
-  // đổi loại → re-validate asset + clamp qty
+  // Đổi loại → re-validate asset + clamp qty (cho MỌI loại)
   useEffect(() => {
     if (!type || !assetDetail?.asset?.ID) return;
     const lite = assets.find(x => x.ID === assetDetail.asset.ID);
@@ -238,21 +287,36 @@ export default function RequestCreatePage() {
       message.info("Loại yêu cầu thay đổi: " + reason);
       return;
     }
-    if (type === "ALLOCATION") {
-      const maxQty = Number(assetDetail.asset.Quantity || lite?.Quantity || 1) || 1;
-      const cur = Number(form.getFieldValue("Quantity") || 1);
-      form.setFieldValue("Quantity", Math.min(Math.max(cur, 1), maxQty));
-    }
+    const mx = Number(assetDetail.asset.Quantity || lite?.Quantity || 1) || 1;
+    const cur = Number(form.getFieldValue("Quantity") || 1);
+    form.setFieldValue("Quantity", clamp(cur, 1, mx));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type]);
 
-  // ===== options Select: label (dropdown) khác display (để ô đã chọn không tràn)
+  // Khi chọn User → nếu chưa chọn Department thì tự set theo User
+  useEffect(() => {
+    if (!watchTargetUserId) return;
+    const u = users.find(x => Number(x.value) === Number(watchTargetUserId));
+    if (!form.getFieldValue("TargetDepartmentID") && u?.DepartmentID != null) {
+      form.setFieldValue("TargetDepartmentID", Number(u.DepartmentID));
+    }
+  }, [watchTargetUserId, users]);  // eslint-disable-line
+
+  // Filter user theo department (nếu đã chọn)
+  const userOptions = useMemo(() => {
+    const dept = Number(watchTargetDeptId || 0);
+    const list = dept
+      ? users.filter(u => Number(u.DepartmentID || 0) === dept)
+      : users;
+    return list;
+  }, [users, watchTargetDeptId]);
+
+  // ===== options Select: Asset
   const assetOptions = useMemo(() => {
     return assets.map(a => {
       const primary = a.ManageCode || a.AssetCode || a.SerialNumber || a.ID;
       const sub = a.Name || "(Không tên)";
-      const display = `${primary}${a.SerialNumber ? ` • SN: ${a.SerialNumber}` : ""}`; // hiển thị ngắn trong ô chọn
-
+      const display = `${primary}${a.SerialNumber ? ` • SN: ${a.SerialNumber}` : ""}`;
       const label = (
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
           <div style={{ minWidth:0 }}>
@@ -270,8 +334,8 @@ export default function RequestCreatePage() {
       );
       return {
         value: a.ID,
-        label,                   // dùng trong dropdown
-        display,                 // dùng trong ô đã chọn (ngắn gọn)
+        label,
+        display,
         disabled: !allowedByTypeLite(form.getFieldValue("type"), a.Status),
         searchKey: `${a.ManageCode} ${a.AssetCode} ${a.SerialNumber} ${a.Name} ${STATUS_LABEL[a.Status] || a.Status}`.toLowerCase(),
       };
@@ -283,6 +347,10 @@ export default function RequestCreatePage() {
     () => assets.find(x => x.ID === selectedAssetId),
     [assets, selectedAssetId]
   );
+
+  // Max quantity cho MỌI loại
+  const maxQty =
+    Number(assetDetail?.asset?.Quantity || selectedFromList?.Quantity || 1) || 1;
 
   const onFinish = async (values) => {
     if (!currentUser?.UserID) return message.error("Không xác định người tạo yêu cầu.");
@@ -297,12 +365,13 @@ export default function RequestCreatePage() {
     const reason = disallowReasonByType(values.type, lite?.Status, detail.asset);
     if (reason) return message.error(reason);
 
-    // clamp Quantity theo tồn
-    let qty = 1;
-    if (values.type === "ALLOCATION") {
-      const maxQty = Number(detail.asset.Quantity || lite?.Quantity || 1) || 1;
-      qty = Math.min(Math.max(Number(values.Quantity || 1), 1), maxQty);
-    }
+    // clamp Quantity theo tồn (áp dụng MỌI loại)
+    const mx = Number(detail.asset.Quantity || lite?.Quantity || 1) || 1;
+    const qty = clamp(Number(values.Quantity || 1), 1, mx);
+
+    // *** BẮT BUỘC người nhận & phòng ban nhận cho MỌI loại ***
+    if (!values.TargetUserID)       return message.error("Chọn Người nhận (TargetUserID).");
+    if (values.TargetDepartmentID == null) return message.error("Chọn Phòng ban nhận (TargetDepartmentID).");
 
     const payload = {
       typeCode: values.type,
@@ -313,6 +382,9 @@ export default function RequestCreatePage() {
       IssueDescription: values.IssueDescription,
       Reason: values.Reason,
       WarrantyProvider: values.WarrantyProvider,
+      // luôn gửi cho mọi loại:
+      TargetUserID: Number(values.TargetUserID),
+      TargetDepartmentID: Number(values.TargetDepartmentID),
     };
     Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
 
@@ -322,7 +394,7 @@ export default function RequestCreatePage() {
       const rid = resp?.data?.data?.RequestID;
       message.success(resp?.data?.message || "Tạo yêu cầu thành công");
       if (rid) message.info(`RequestID: ${rid}`);
-      form.resetFields(["AssetID","Quantity","IssueDescription","Reason","WarrantyProvider","Note"]);
+      form.resetFields(["AssetID","Quantity","IssueDescription","Reason","WarrantyProvider","Note","TargetUserID","TargetDepartmentID"]);
       setAssetDetail(null);
     } catch (e) {
       message.error(e?.response?.data?.message || "Không tạo được yêu cầu");
@@ -331,14 +403,8 @@ export default function RequestCreatePage() {
     }
   };
 
-  // ====== UI ======
-  const maxQty =
-    type === "ALLOCATION"
-      ? Number(assetDetail?.asset?.Quantity || selectedFromList?.Quantity || 1) || 1
-      : undefined;
-
   return (
-    <div style={{ maxWidth: 820, margin: "0 auto" }}>
+    <div style={{ maxWidth: 880, margin: "0 auto" }}>
       {/* HEADER */}
       <Card size="small" bodyStyle={{ padding:10 }} style={{ borderRadius:10, marginBottom:12 }}>
         <Space wrap>
@@ -351,10 +417,18 @@ export default function RequestCreatePage() {
               Reload assets
             </Button>
           </Tooltip>
+          {watchTargetUserId && (
+            <Tag color="blue">Người nhận: {users.find(u => Number(u.value) === Number(watchTargetUserId))?.label}</Tag>
+          )}
+          {watchTargetDeptId != null && (
+            <Tag color="geekblue">Phòng ban nhận: {
+              departments.find(d => Number(d.value) === Number(watchTargetDeptId))?.label || watchTargetDeptId
+            }</Tag>
+          )}
         </Space>
       </Card>
 
-      {/* FORM (compact) */}
+      {/* FORM */}
       <Card size="small" style={{ borderRadius:10 }} bodyStyle={{ padding:14 }}>
         <Alert
           type="info"
@@ -370,9 +444,9 @@ export default function RequestCreatePage() {
           onFinish={onFinish}
           initialValues={{ type:"ALLOCATION", Quantity:1 }}
           onValuesChange={(changed) => {
-            if ("Quantity" in changed && type === "ALLOCATION") {
+            if ("Quantity" in changed) {
               const v = Number(changed.Quantity || 1);
-              const clamped = Math.min(Math.max(v, 1), Number(maxQty || 1));
+              const clamped = clamp(v, 1, Number(maxQty || 1));
               if (clamped !== v) form.setFieldValue("Quantity", clamped);
             }
           }}
@@ -399,7 +473,7 @@ export default function RequestCreatePage() {
                 placeholder="Tìm & chọn thiết bị…"
                 loading={loadingAssets}
                 options={assetOptions}
-                optionLabelProp="display"              // hiển thị ngắn gọn trong ô đã chọn -> không tràn
+                optionLabelProp="display"
                 filterOption={(input, option) => (option?.searchKey || "").includes(input.toLowerCase())}
                 dropdownMatchSelectWidth={520}
                 allowClear
@@ -407,28 +481,60 @@ export default function RequestCreatePage() {
             </Form.Item>
           </div>
 
-          {/* Quantity: ALLOCATION, <= asset.Quantity */}
-          {form.getFieldValue("type") === "ALLOCATION" && (
+          {/* Receiver (bắt buộc CHO MỌI LOẠI) */}
+          <div style={{ display:"grid", gap:10, gridTemplateColumns:"repeat(auto-fit, minmax(260px, 1fr))" }}>
             <Form.Item
-              name="Quantity"
-              label={`Số lượng (tối đa ${maxQty ?? 1})`}
-              rules={[
-                { required:true, message:"Nhập số lượng" },
-                ({ getFieldValue }) => ({
-                  validator(_, v){
-                    const val = Number(v || 0);
-                    const mx = Number(maxQty || 1);
-                    if (!val || val < 1) return Promise.reject(new Error("Số lượng ≥ 1"));
-                    if (val > mx) return Promise.reject(new Error(`Không vượt quá số lượng tồn (${mx})`));
-                    return Promise.resolve();
-                  }
-                })
-              ]}
-              style={{ width: 220 }}
+              name="TargetDepartmentID"
+              label="Phòng ban nhận"
+              rules={[{ required: true, message: "Chọn phòng ban nhận" }]}
             >
-              <InputNumber min={1} max={maxQty || 1} style={{ width:"100%" }} />
+              <Select
+                showSearch
+                placeholder="Chọn phòng ban…"
+                loading={loadingDepts}
+                options={departments}
+                optionFilterProp="label"
+                allowClear
+              />
             </Form.Item>
-          )}
+
+            <Form.Item
+              name="TargetUserID"
+              label="Người nhận"
+              rules={[{ required: true, message: "Chọn người nhận" }]}
+              tooltip="Khi chọn phòng ban trước, danh sách người nhận sẽ lọc theo phòng ban đó."
+            >
+              <Select
+                showSearch
+                placeholder="Chọn người nhận…"
+                loading={loadingUsers}
+                options={userOptions}
+                optionFilterProp="label"
+                allowClear
+              />
+            </Form.Item>
+          </div>
+
+          {/* Quantity */}
+          <Form.Item
+            name="Quantity"
+            label={`Số lượng (tối đa ${maxQty ?? 1})`}
+            rules={[
+              { required:true, message:"Nhập số lượng" },
+              () => ({
+                validator(_, v){
+                  const val = Number(v || 0);
+                  const mx = Number(maxQty || 1);
+                  if (!val || val < 1) return Promise.reject(new Error("Số lượng ≥ 1"));
+                  if (val > mx)        return Promise.reject(new Error(`Không vượt quá số lượng tồn (${mx})`));
+                  return Promise.resolve();
+                }
+              })
+            ]}
+            style={{ width: 220 }}
+          >
+            <InputNumber min={1} max={maxQty || 1} style={{ width:"100%" }} />
+          </Form.Item>
 
           {/* Conditional fields */}
           <Form.Item
@@ -481,147 +587,135 @@ export default function RequestCreatePage() {
         </Form>
       </Card>
 
-      {/* ASSET DETAIL (đẹp, dễ đọc) */}
-<Card
-  size="small"
-  title="Thông tin thiết bị"
-  style={{ borderRadius:10, marginTop:12 }}
-  bodyStyle={{ padding:14 }}
-  extra={
-    <Space>
-      <Tag color={STATUS_COLOR[(assetDetail?.asset?.Status ?? selectedFromList?.Status) || "default"] || "default"}>
-        {STATUS_LABEL[(assetDetail?.asset?.Status ?? selectedFromList?.Status)] || "-"}
-      </Tag>
-      <Badge count={assetDetail?.attributes?.length || 0} title="Số thuộc tính kỹ thuật" />
-    </Space>
-  }
->
-  <Spin spinning={loadingDetail}>
-    {!selectedAssetId ? (
-      <Alert type="info" showIcon message="Chưa chọn thiết bị" description="Hãy chọn một thiết bị ở form phía trên để xem chi tiết." />
-    ) : (
-      (() => {
-        const a = assetDetail?.asset || {};
-        const name = a.Name || selectedFromList?.Name || "-";
-        const manage = a.ManageCode || selectedFromList?.ManageCode || a.AssetCode || selectedFromList?.AssetCode || "-";
-        const serial = a.SerialNumber || selectedFromList?.SerialNumber || "-";
-        const qty = a.Quantity ?? selectedFromList?.Quantity ?? "-";
-        const cat = a.CategoryName || "-";
-        const model = a.ItemMasterName || "-";
-        const vendor = a.VendorName || "-";
-        const w = warrantyInfo(a.WarrantyStartDate, a.WarrantyEndDate);
+      {/* ASSET DETAIL */}
+      <Card
+        size="small"
+        title="Thông tin thiết bị"
+        style={{ borderRadius:10, marginTop:12 }}
+        bodyStyle={{ padding:14 }}
+        extra={
+          <Space>
+            <Tag color={STATUS_COLOR[(assetDetail?.asset?.Status ?? selectedFromList?.Status) || "default"] || "default"}>
+              {STATUS_LABEL[(assetDetail?.asset?.Status ?? selectedFromList?.Status)] || "-"}
+            </Tag>
+            <Badge count={assetDetail?.attributes?.length || 0} title="Số thuộc tính kỹ thuật" />
+          </Space>
+        }
+      >
+        <Spin spinning={loadingDetail}>
+          {!selectedAssetId ? (
+            <Alert type="info" showIcon message="Chưa chọn thiết bị" description="Hãy chọn một thiết bị ở form phía trên để xem chi tiết." />
+          ) : (
+            (() => {
+              const a = assetDetail?.asset || {};
+              const name = a.Name || selectedFromList?.Name || "-";
+              const manage = a.ManageCode || selectedFromList?.ManageCode || a.AssetCode || selectedFromList?.AssetCode || "-";
+              const serial = a.SerialNumber || selectedFromList?.SerialNumber || "-";
+              const qty = a.Quantity ?? selectedFromList?.Quantity ?? "-";
+              const cat = a.CategoryName || "-";
+              const model = a.ItemMasterName || "-";
+              const vendor = a.VendorName || "-";
+              const w = warrantyInfo(a.WarrantyStartDate, a.WarrantyEndDate);
 
-        return (
-          <div style={{ display:"grid", gap:12 }}>
-            {/* Header */}
-            <div style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap" }}>
-              <Title level={5} style={{ margin:0 }}>{name}</Title>
-              <Space wrap size={6} style={{ color:"#666" }}>
-                <Tag>{`Mã: ${manage}`}</Tag>
-                <Tag>{`Serial: ${serial}`}</Tag>
-                {a.QRCode ? <Tag icon={<QrcodeOutlined />}>{a.QRCode}</Tag> : null}
-              </Space>
-              <div style={{ marginLeft:"auto" }}>
-                <Text type="secondary">ID:&nbsp;</Text>
-                <Text code copyable={{ text: a.ID || selectedAssetId }}>
-                  {shortId(a.ID || selectedAssetId)}
-                </Text>
-              </div>
-            </div>
-
-            {/* Meta chips */}
-            <Space wrap>
-              <Tag color="processing">Loại: {cat}</Tag>
-              <Tag color="geekblue">Model: {model}</Tag>
-              <Tag color="purple">Vendor: {vendor}</Tag>
-              <Tag color="gold">Tồn: {qty}</Tag>
-              {(a.HasOpenRequest || a.OpenRequestCount > 0) && <Tag color="orange">Có yêu cầu đang mở</Tag>}
-            </Space>
-
-            <Divider style={{ margin:"8px 0" }} />
-
-            {/* 2 cột chính */}
-            <div
-              style={{
-                display:"grid",
-                gridTemplateColumns:"1fr 1fr",
-                gap:12,
-              }}
-            >
-              {/* Cột trái */}
-              <Card size="small" bordered={true} bodyStyle={{ padding:12 }}>
-                <Title level={5} style={{ marginTop:0 }}>Mua hàng</Title>
-                <div style={{ lineHeight:1.8 }}>
-                  <div><Text type="secondary">PO:&nbsp;</Text>{a.PurchaseId || "-"}</div>
-                  <div><Text type="secondary">Ngày:&nbsp;</Text>{fmtDate(a.PurchaseDate)}</div>
-                  <div><Text type="secondary">Giá:&nbsp;</Text>{fmtMoney(a.PurchasePrice)}</div>
-                </div>
-              </Card>
-
-              {/* Cột phải */}
-              <Card size="small" bordered={true} bodyStyle={{ padding:12 }}>
-                <Title level={5} style={{ marginTop:0 }}>Bảo hành</Title>
-                <div style={{ lineHeight:1.8, marginBottom:8 }}>
-                  <div><Text type="secondary">Start:&nbsp;</Text>{fmtDate(a.WarrantyStartDate)}</div>
-                  <div><Text type="secondary">End:&nbsp;</Text>{fmtDate(a.WarrantyEndDate)}</div>
-                </div>
-                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                  <div style={{ flex:1 }}>
-                    <Progress percent={w.percent} size="small" status={w.active ? "active" : "normal"} />
+              return (
+                <div style={{ display:"grid", gap:12 }}>
+                  <div style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap" }}>
+                    <Title level={5} style={{ margin:0 }}>{name}</Title>
+                    <Space wrap size={6} style={{ color:"#666" }}>
+                      <Tag>{`Mã: ${manage}`}</Tag>
+                      <Tag>{`Serial: ${serial}`}</Tag>
+                      {a.QRCode ? <Tag icon={<QrcodeOutlined />}>{a.QRCode}</Tag> : null}
+                    </Space>
+                    <div style={{ marginLeft:"auto" }}>
+                      <Text type="secondary">ID:&nbsp;</Text>
+                      <Text code copyable={{ text: a.ID || selectedAssetId }}>
+                        {shortId(a.ID || selectedAssetId)}
+                      </Text>
+                    </div>
                   </div>
-                  {w.active ? <Tag color="green">Còn {w.daysLeft} ngày</Tag> : <Tag>Hết/không BH</Tag>}
-                </div>
-                <div style={{ fontSize:12, color:"#999" }}>
-                  Tổng {w.totalDays} ngày • Đã dùng {w.percent}%
-                </div>
-              </Card>
 
-              {/* Dòng 2 */}
-              <Card size="small" bordered={true} bodyStyle={{ padding:12 }}>
-                <Title level={5} style={{ marginTop:0 }}>Gán hiện tại</Title>
-                <div style={{ lineHeight:1.8 }}>
-                  <div><Text type="secondary">Nhân viên:&nbsp;</Text>{a.EmployeeName || "-"}</div>
-                  <div><Text type="secondary">Phòng ban:&nbsp;</Text>{a.DepartmentName || "-"}</div>
-                </div>
-              </Card>
+                  <Space wrap>
+                    <Tag color="processing">Loại: {cat}</Tag>
+                    <Tag color="geekblue">Model: {model}</Tag>
+                    <Tag color="purple">Vendor: {vendor}</Tag>
+                    <Tag color="gold">Tồn: {qty}</Tag>
+                    {(a.HasOpenRequest || a.OpenRequestCount > 0) && <Tag color="orange">Có yêu cầu đang mở</Tag>}
+                  </Space>
 
-              <Card size="small" bordered={true} bodyStyle={{ padding:12 }}>
-                <Title level={5} style={{ marginTop:0 }}>Thông tin khác</Title>
-                <div style={{ lineHeight:1.8 }}>
-                  <div><Text type="secondary">CategoryID:&nbsp;</Text>{shortId(a.CategoryID)}</div>
-                  <div><Text type="secondary">ItemMasterID:&nbsp;</Text>{shortId(a.ItemMasterID)}</div>
-                  <div><Text type="secondary">VendorID:&nbsp;</Text>{shortId(a.VendorID)}</div>
-                </div>
-              </Card>
-            </div>
+                  <Divider style={{ margin:"8px 0" }} />
 
-            {/* Thuộc tính kỹ thuật */}
-            {Array.isArray(assetDetail?.attributes) && assetDetail.attributes.length > 0 && (
-              <>
-                <Title level={5} style={{ margin:0 }}>Thuộc tính kỹ thuật</Title>
-                <List
-                  grid={{ gutter:8, column:3 }}
-                  dataSource={assetDetail.attributes}
-                  renderItem={(att) => (
-                    <List.Item key={att.ID}>
-                      <Card size="small" bodyStyle={{ padding:"8px 10px" }}>
-                        <div style={{ fontWeight:600 }}>{att.Name}</div>
-                        <div style={{ color:"#555" }}>
-                          {att.Value}{att.Unit ? ` ${att.Unit}` : ""}
+                  {/* 2 cột chính */}
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                    <Card size="small" bordered bodyStyle={{ padding:12 }}>
+                      <Title level={5} style={{ marginTop:0 }}>Mua hàng</Title>
+                      <div style={{ lineHeight:1.8 }}>
+                        <div><Text type="secondary">PO:&nbsp;</Text>{a.PurchaseId || "-"}</div>
+                        <div><Text type="secondary">Ngày:&nbsp;</Text>{fmtDate(a.PurchaseDate)}</div>
+                        <div><Text type="secondary">Giá:&nbsp;</Text>{fmtMoney(a.PurchasePrice)}</div>
+                      </div>
+                    </Card>
+
+                    <Card size="small" bordered bodyStyle={{ padding:12 }}>
+                      <Title level={5} style={{ marginTop:0 }}>Bảo hành</Title>
+                      <div style={{ lineHeight:1.8, marginBottom:8 }}>
+                        <div><Text type="secondary">Start:&nbsp;</Text>{fmtDate(a.WarrantyStartDate)}</div>
+                        <div><Text type="secondary">End:&nbsp;</Text>{fmtDate(a.WarrantyEndDate)}</div>
+                      </div>
+                      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                        <div style={{ flex:1 }}>
+                          <Progress percent={w.percent} size="small" status={w.active ? "active" : "normal"} />
                         </div>
-                      </Card>
-                    </List.Item>
-                  )}
-                />
-              </>
-            )}
-          </div>
-        );
-      })()
-    )}
-  </Spin>
-</Card>
+                        {w.active ? <Tag color="green">Còn {w.daysLeft} ngày</Tag> : <Tag>Hết/không BH</Tag>}
+                      </div>
+                      <div style={{ fontSize:12, color:"#999" }}>
+                        Tổng {w.totalDays} ngày • Đã dùng {w.percent}%
+                      </div>
+                    </Card>
 
+                    <Card size="small" bordered bodyStyle={{ padding:12 }}>
+                      <Title level={5} style={{ marginTop:0 }}>Gán hiện tại</Title>
+                      <div style={{ lineHeight:1.8 }}>
+                        <div><Text type="secondary">Nhân viên:&nbsp;</Text>{a.EmployeeName || "-"}</div>
+                        <div><Text type="secondary">Phòng ban:&nbsp;</Text>{a.DepartmentName || "-"}</div>
+                      </div>
+                    </Card>
+
+                    <Card size="small" bordered bodyStyle={{ padding:12 }}>
+                      <Title level={5} style={{ marginTop:0 }}>Thông tin khác</Title>
+                      <div style={{ lineHeight:1.8 }}>
+                        <div><Text type="secondary">CategoryID:&nbsp;</Text>{shortId(a.CategoryID)}</div>
+                        <div><Text type="secondary">ItemMasterID:&nbsp;</Text>{shortId(a.ItemMasterID)}</div>
+                        <div><Text type="secondary">VendorID:&nbsp;</Text>{shortId(a.VendorID)}</div>
+                      </div>
+                    </Card>
+                  </div>
+
+                  {/* Thuộc tính kỹ thuật */}
+                  {Array.isArray(assetDetail?.attributes) && assetDetail.attributes.length > 0 && (
+                    <>
+                      <Title level={5} style={{ margin:0 }}>Thuộc tính kỹ thuật</Title>
+                      <List
+                        grid={{ gutter:8, column:3 }}
+                        dataSource={assetDetail.attributes}
+                        renderItem={(att) => (
+                          <List.Item key={att.ID}>
+                            <Card size="small" bodyStyle={{ padding:"8px 10px" }}>
+                              <div style={{ fontWeight:600 }}>{att.Name}</div>
+                              <div style={{ color:"#555" }}>
+                                {att.Value}{att.Unit ? ` ${att.Unit}` : ""}
+                              </div>
+                            </Card>
+                          </List.Item>
+                        )}
+                      />
+                    </>
+                  )}
+                </div>
+              );
+            })()
+          )}
+        </Spin>
+      </Card>
     </div>
   );
 }

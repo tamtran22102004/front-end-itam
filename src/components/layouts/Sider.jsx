@@ -54,8 +54,10 @@ const siderItems = [
         key: "Approval",
         label: "Duyệt yêu cầu",
         children: [
-          { key: "/requestapproval", label: " Cấp phát" },
+          { key: "/requestallocation", label: " Cấp phát" },
           { key: "/requestmaintenance", label: " Bảo trì" },
+          { key: "/requestwarranty", label: " Bảo hành" },
+          { key: "/requestdisposal", label: " Thanh lý" },
         ],
       },
     ],

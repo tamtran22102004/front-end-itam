@@ -1,18 +1,16 @@
-// src/pages/MaintenanceApprovalPage.jsx
+// src/pages/DisposalApprovalPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Card, Space, Button, Table, Tag, Descriptions, Timeline, Typography, Input,
   message, Row, Col, Empty, Select
 } from "antd";
-import {
-  ReloadOutlined, EyeOutlined, CheckOutlined, CloseOutlined, SearchOutlined
-} from "@ant-design/icons";
+import { ReloadOutlined, EyeOutlined, CheckOutlined, CloseOutlined, SearchOutlined } from "@ant-design/icons";
 import axios from "axios";
 
 const { Text } = Typography;
 
-const API_URL = import.meta.env.VITE_BACKEND_URL;
-const BASE      = `${API_URL}/api/requestmaintenance`;
+const API_URL   = import.meta.env.VITE_BACKEND_URL;
+const BASE      = `${API_URL}/api/requestdisposal`;
 const USERS_API = `${API_URL}/api/getuserinfo`;
 const DEPTS_API = `${API_URL}/api/getdepartment`;
 
@@ -21,29 +19,22 @@ const getToken = () => localStorage.getItem("token") || "";
 const withAuth = () => ({ headers: { Authorization: `Bearer ${getToken()}` } });
 
 const normalizeUser = (u) =>
-  !u
-    ? null
-    : {
-        UserID: Number(u.UserID ?? u.userID ?? u.id ?? u.userId ?? 0),
-        DepartmentID: u.DepartmentID ?? u.departmentID ?? u.deptId ?? null,
-        FullName: u.FullName ?? u.fullname ?? u.fullName ?? u.name ?? "",
-        Email: u.Email ?? u.email ?? "",
-        Role: String(u.Role ?? u.role ?? "").toUpperCase() || null,
-      };
+  !u ? null : {
+    UserID: Number(u.UserID ?? u.userID ?? u.id ?? u.userId ?? 0),
+    DepartmentID: u.DepartmentID ?? u.departmentID ?? u.deptId ?? null,
+    FullName: u.FullName ?? u.fullname ?? u.fullName ?? u.name ?? "",
+    Email: u.Email ?? u.email ?? "",
+    Role: String(u.Role ?? u.role ?? "").toUpperCase() || null,
+  };
 
-const fmt = (v) => (v ? String(v).replace("T", " ").slice(0, 19) : "");
+const fmt = (v) => (v ? String(v).replace("T"," ").slice(0,19) : "");
 
 const stateTag = (st) => {
   const color =
-    st === "PENDING"
-      ? "gold"
-      : st?.startsWith("IN_PROGRESS")
-      ? "blue"
-      : st === "APPROVED"
-      ? "green"
-      : st === "REJECTED"
-      ? "red"
-      : "default";
+    st === "PENDING" ? "gold" :
+    st?.startsWith("IN_PROGRESS") ? "blue" :
+    st === "APPROVED" ? "green" :
+    st === "REJECTED" ? "red" : "default";
   return <Tag color={color}>{st || "-"}</Tag>;
 };
 
@@ -54,7 +45,6 @@ const canApproveByRole = (state, role) => {
   return false;
 };
 
-// List extractor
 const extractRequests = (payload) => {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.data?.requests)) return payload.data.requests;
@@ -62,85 +52,51 @@ const extractRequests = (payload) => {
   return [];
 };
 
-// Detail extractor (Maintenance)
 const normalizeDetail = (respData) => {
   const root = respData?.data ?? respData ?? {};
   const data = root?.data ?? root;
-
   const request = data.request || data.Request || null;
-
-  let maintenance =
-    data.maintenance ??
-    data.maint ??
-    data.request_maintenance ??
-    data.Request_Maintenance ??
-    null;
-  if (Array.isArray(maintenance)) maintenance = maintenance[0] || null;
-
-  const history =
-    data.history || data.approvalHistory || data.ApprovalHistory || [];
-
-  return { request, maintenance, history };
+  let disposal = data.disposal ?? data.Request_Disposal ?? data.request_disposal ?? null;
+  if (Array.isArray(disposal)) disposal = disposal[0] || null;
+  const history = data.history || data.approvalHistory || data.ApprovalHistory || [];
+  return { request, disposal, history };
 };
 
-export default function MaintenanceApprovalPage() {
-  // current user
+export default function DisposalApprovalPage(){
   const [currentUser, setCurrentUser] = useState(null);
   useEffect(() => {
     try {
-      const savedUser = localStorage.getItem("user");
-      if (savedUser && savedUser !== "undefined")
-        setCurrentUser(normalizeUser(JSON.parse(savedUser)));
+      const saved = localStorage.getItem("user");
+      if (saved && saved !== "undefined") setCurrentUser(normalizeUser(JSON.parse(saved)));
     } catch {}
   }, []);
 
-  // reference data (users/departments)
-  const [users, setUsers] = useState([]);     // [{value,label,DepartmentID}]
-  const [usersMap, setUsersMap] = useState({}); // id -> {label, DepartmentID}
-  const [depts, setDepts] = useState([]);     // [{value,label}]
-  const [deptsMap, setDeptsMap] = useState({}); // id -> label
+  // refs
+  const [users, setUsers] = useState([]);
+  const [usersMap, setUsersMap] = useState({});
+  const [depts, setDepts] = useState([]);
+  const [deptsMap, setDeptsMap] = useState({});
   const [loadingRefs, setLoadingRefs] = useState(false);
 
   const loadRefs = async () => {
     setLoadingRefs(true);
     try {
-      // users
       const ures = await axios.get(USERS_API, withAuth());
-      const uarr = Array.isArray(ures?.data?.data)
-        ? ures.data.data
-        : Array.isArray(ures?.data)
-        ? ures.data
-        : [];
-      const uopts = uarr.map((u) => {
+      const uarr = Array.isArray(ures?.data?.data) ? ures.data.data : Array.isArray(ures?.data) ? ures.data : [];
+      const uopts = uarr.map(u => {
         const id = Number(u.UserID);
-        return {
-          value: id,
-          label: u.FullName || `User ${id}`,
-          DepartmentID: u.DepartmentID ?? null,
-        };
+        return { value:id, label: u.FullName || `User ${id}`, DepartmentID: u.DepartmentID ?? null };
       });
-      const umap = {};
-      uopts.forEach((o) => (umap[o.value] = o));
-      setUsers(uopts);
-      setUsersMap(umap);
+      const umap = {}; uopts.forEach(o => umap[o.value] = o);
+      setUsers(uopts); setUsersMap(umap);
 
-      // departments
       const dres = await axios.get(DEPTS_API, withAuth());
-      const darr = Array.isArray(dres?.data?.data)
-        ? dres.data.data
-        : Array.isArray(dres?.data)
-        ? dres.data
-        : [];
-      const dopts = darr.map((d) => ({
-        value: Number(d.DepartmentID),
-        label: d.DepartmentName || `Dept ${d.DepartmentID}`,
-      }));
-      const dmap = {};
-      dopts.forEach((o) => (dmap[o.value] = o.label));
-      setDepts(dopts);
-      setDeptsMap(dmap);
+      const darr = Array.isArray(dres?.data?.data) ? dres.data.data : Array.isArray(dres?.data) ? dres.data : [];
+      const dopts = darr.map(d => ({ value:Number(d.DepartmentID), label: d.DepartmentName || `Dept ${d.DepartmentID}` }));
+      const dmap = {}; dopts.forEach(o => dmap[o.value] = o.label);
+      setDepts(dopts); setDeptsMap(dmap);
     } catch (e) {
-      message.warning("Không tải được dữ liệu Users/Departments.");
+      message.warning("Không tải được Users/Departments.");
     } finally {
       setLoadingRefs(false);
     }
@@ -157,10 +113,8 @@ export default function MaintenanceApprovalPage() {
     setLoadingList(true);
     try {
       const resp = await axios.get(`${BASE}/getallrequest`, withAuth());
-      const list = extractRequests(resp.data).map((r) => ({
-        ...r,
-        TotalQuantity:
-          r.TotalQuantity != null ? Number(r.TotalQuantity) : r.TotalQuantity,
+      const list = extractRequests(resp.data).map(r => ({
+        ...r, TotalQuantity: r.TotalQuantity != null ? Number(r.TotalQuantity) : r.TotalQuantity
       }));
       setRows(list);
     } catch (e) {
@@ -173,7 +127,6 @@ export default function MaintenanceApprovalPage() {
   // detail
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [detail, setDetail] = useState(null);
-
   const fetchDetail = async (id) => {
     setLoadingDetail(true);
     try {
@@ -189,11 +142,12 @@ export default function MaintenanceApprovalPage() {
   };
 
   const doAction = async (recordOrDetail, isApprove) => {
-    const req = recordOrDetail?.RequestID
-      ? recordOrDetail
-      : recordOrDetail?.request?.RequestID
-      ? recordOrDetail.request
-      : null;
+    const req =
+      recordOrDetail?.RequestID
+        ? recordOrDetail
+        : recordOrDetail?.request?.RequestID
+        ? recordOrDetail.request
+        : null;
     if (!req) return message.warning("Không xác định được Request để duyệt.");
 
     const role = currentUser?.Role;
@@ -227,50 +181,31 @@ export default function MaintenanceApprovalPage() {
     }
   };
 
-  useEffect(() => {
-    loadRefs();
-    fetchAll();
-  }, []);
+  useEffect(() => { loadRefs(); fetchAll(); }, []);
 
-  // name helpers
-  const userName = (id) => (id && usersMap[id]?.label) || (id ?? "-");
-  const deptName = (id) => (id && deptsMap[id]) || (id ?? "-");
+  const userName  = (id) => (id && usersMap[id]?.label) || (id ?? "-");
+  const deptName  = (id) => (id && deptsMap[id]) || (id ?? "-");
 
   const filteredRows = useMemo(() => {
     let data = rows;
-
     if (searchText) {
       const s = searchText.toLowerCase();
-      data = data.filter((r) => {
+      data = data.filter(r => {
         const id = String(r.RequestID || "").toLowerCase();
         const note = String(r.Note || "").toLowerCase();
         const state = String(r.CurrentState || "").toLowerCase();
         const qty = String(r.TotalQuantity ?? "").toLowerCase();
-
-        const tu = r.TargetUserID;
-        const td = r.TargetDepartmentID;
-        const tuName = String(userName(tu)).toLowerCase();
-        const tdName = String(deptName(td)).toLowerCase();
-
-        return (
-          id.includes(s) ||
-          note.includes(s) ||
-          state.includes(s) ||
-          qty.includes(s) ||
-          tuName.includes(s) ||
-          tdName.includes(s)
-        );
+        const tuName = String(userName(r.TargetUserID)).toLowerCase();
+        const tdName = String(deptName(r.TargetDepartmentID)).toLowerCase();
+        return id.includes(s) || note.includes(s) || state.includes(s) || qty.includes(s) || tuName.includes(s) || tdName.includes(s);
       });
     }
-
     if (filterTargetUser != null) {
-      data = data.filter((r) => Number(r.TargetUserID) === Number(filterTargetUser));
+      data = data.filter(r => Number(r.TargetUserID) === Number(filterTargetUser));
     }
-
     if (filterTargetDept != null) {
-      data = data.filter((r) => Number(r.TargetDepartmentID) === Number(filterTargetDept));
+      data = data.filter(r => Number(r.TargetDepartmentID) === Number(filterTargetDept));
     }
-
     return data;
   }, [rows, searchText, filterTargetUser, filterTargetDept]);
 
@@ -281,33 +216,21 @@ export default function MaintenanceApprovalPage() {
       dataIndex: "RequesterUserID",
       key: "RequesterUserID",
       width: 180,
-      render: (v) => (
-        <span>
-          <b>{userName(v)}</b> <Tag style={{ marginLeft: 6 }}>{v ?? "-"}</Tag>
-        </span>
-      ),
+      render: (v) => (<span><b>{userName(v)}</b> <Tag style={{ marginLeft:6 }}>{v ?? "-"}</Tag></span>),
     },
     {
       title: "Người nhận",
       dataIndex: "TargetUserID",
       key: "TargetUserID",
       width: 220,
-      render: (v) => (
-        <span>
-          <b>{userName(v)}</b> <Tag style={{ marginLeft: 6 }}>{v ?? "-"}</Tag>
-        </span>
-      ),
+      render: (v) => (<span><b>{userName(v)}</b> <Tag style={{ marginLeft:6 }}>{v ?? "-"}</Tag></span>),
     },
     {
       title: "Phòng nhận",
       dataIndex: "TargetDepartmentID",
       key: "TargetDepartmentID",
       width: 200,
-      render: (v) => (
-        <span>
-          <b>{deptName(v)}</b> <Tag style={{ marginLeft: 6 }}>{v ?? "-"}</Tag>
-        </span>
-      ),
+      render: (v) => (<span><b>{deptName(v)}</b> <Tag style={{ marginLeft:6 }}>{v ?? "-"}</Tag></span>),
     },
     {
       title: "Trạng thái",
@@ -323,19 +246,8 @@ export default function MaintenanceApprovalPage() {
       width: 110,
       render: (v) => (v == null ? 0 : v),
     },
-    {
-      title: "CreatedAt",
-      dataIndex: "CreatedAt",
-      key: "CreatedAt",
-      width: 170,
-      render: (v) => fmt(v),
-    },
-    {
-      title: "Note",
-      dataIndex: "Note",
-      key: "Note",
-      ellipsis: true,
-    },
+    { title: "CreatedAt", dataIndex: "CreatedAt", key: "CreatedAt", width: 170, render: (v) => fmt(v) },
+    { title: "Note", dataIndex: "Note", key: "Note", ellipsis: true },
     {
       title: "Actions",
       key: "actions",
@@ -343,9 +255,7 @@ export default function MaintenanceApprovalPage() {
       width: 260,
       render: (_, record) => (
         <Space>
-          <Button icon={<EyeOutlined />} onClick={() => fetchDetail(record.RequestID)}>
-            Xem
-          </Button>
+          <Button icon={<EyeOutlined />} onClick={() => fetchDetail(record.RequestID)}>Xem</Button>
           <Button
             type="primary"
             icon={<CheckOutlined />}
@@ -377,10 +287,10 @@ export default function MaintenanceApprovalPage() {
     },
   ];
 
-  const request = detail?.request;
-  const maintenance = detail?.maintenance;
-  const history = detail?.history || [];
-  const stepId = STEP_ID_BY_ROLE[currentUser?.Role];
+  const request  = detail?.request;
+  const disposal = detail?.disposal;
+  const history  = detail?.history || [];
+  const stepId   = STEP_ID_BY_ROLE[currentUser?.Role];
 
   return (
     <Space direction="vertical" size="large" style={{ width: "100%" }}>
@@ -426,7 +336,7 @@ export default function MaintenanceApprovalPage() {
       </Card>
 
       {/* Danh sách */}
-      <Card title="Danh sách yêu cầu bảo trì" size="small" bodyStyle={{ paddingTop: 0 }}>
+      <Card title="Danh sách yêu cầu thanh lý" size="small" bodyStyle={{ paddingTop: 0 }}>
         <Table
           rowKey={(r, idx) => r?.RequestID ?? idx}
           loading={loadingList}
@@ -446,57 +356,39 @@ export default function MaintenanceApprovalPage() {
           <Card title="Thông tin yêu cầu" size="small" loading={loadingDetail}>
             {request ? (
               <Descriptions bordered size="small" column={1}>
-                <Descriptions.Item label="RequestID">
-                  {request.RequestID}
-                </Descriptions.Item>
-                <Descriptions.Item label="Loại">
-                  Maintenance (Bảo trì)
-                </Descriptions.Item>
+                <Descriptions.Item label="RequestID">{request.RequestID}</Descriptions.Item>
+                <Descriptions.Item label="Loại">Disposal (Thanh lý)</Descriptions.Item>
                 <Descriptions.Item label="Requester">
-                  <b>{userName(request.RequesterUserID)}</b>{" "}
-                  <Tag style={{ marginLeft: 6 }}>{request.RequesterUserID ?? "-"}</Tag>
+                  <b>{(request.RequesterUserID && usersMap[request.RequesterUserID]?.label) || request.RequesterUserID || "-"}</b>{" "}
+                  <Tag style={{ marginLeft:6 }}>{request.RequesterUserID ?? "-"}</Tag>
                 </Descriptions.Item>
                 <Descriptions.Item label="Người nhận">
-                  <b>{userName(request.TargetUserID)}</b>{" "}
-                  <Tag style={{ marginLeft: 6 }}>{request.TargetUserID ?? "-"}</Tag>
+                  <b>{(request.TargetUserID && usersMap[request.TargetUserID]?.label) || request.TargetUserID || "-"}</b>{" "}
+                  <Tag style={{ marginLeft:6 }}>{request.TargetUserID ?? "-"}</Tag>
                 </Descriptions.Item>
                 <Descriptions.Item label="Phòng nhận">
-                  <b>{deptName(request.TargetDepartmentID)}</b>{" "}
-                  <Tag style={{ marginLeft: 6 }}>{request.TargetDepartmentID ?? "-"}</Tag>
+                  <b>{(request.TargetDepartmentID && deptsMap[request.TargetDepartmentID]) || request.TargetDepartmentID || "-"}</b>{" "}
+                  <Tag style={{ marginLeft:6 }}>{request.TargetDepartmentID ?? "-"}</Tag>
                 </Descriptions.Item>
-                <Descriptions.Item label="Trạng thái">
-                  {stateTag(request.CurrentState)}
-                </Descriptions.Item>
-                <Descriptions.Item label="Note">
-                  {request.Note || "-"}
-                </Descriptions.Item>
-                <Descriptions.Item label="CreatedAt">
-                  {fmt(request.CreatedAt)}
-                </Descriptions.Item>
-                <Descriptions.Item label="UpdatedAt">
-                  {fmt(request.UpdatedAt)}
-                </Descriptions.Item>
+                <Descriptions.Item label="Trạng thái">{stateTag(request.CurrentState)}</Descriptions.Item>
+                <Descriptions.Item label="Note">{request.Note || "-"}</Descriptions.Item>
+                <Descriptions.Item label="CreatedAt">{fmt(request.CreatedAt)}</Descriptions.Item>
+                <Descriptions.Item label="UpdatedAt">{fmt(request.UpdatedAt)}</Descriptions.Item>
               </Descriptions>
             ) : (
               <Empty description="Chọn bản ghi ở danh sách phía trên để xem" />
             )}
           </Card>
 
-          <Card title="Chi tiết bảo trì" size="small" loading={loadingDetail}>
-            {maintenance ? (
+          <Card title="Chi tiết thanh lý" size="small" loading={loadingDetail}>
+            {disposal ? (
               <Descriptions bordered size="small" column={1}>
-                <Descriptions.Item label="AssetID">
-                  {maintenance.AssetID ?? "-"}
-                </Descriptions.Item>
-                <Descriptions.Item label="Quantity">
-                  {maintenance.Quantity ?? "-"}
-                </Descriptions.Item>
-                <Descriptions.Item label="Issue">
-                  {maintenance.IssueDescription || "-"}
-                </Descriptions.Item>
+                <Descriptions.Item label="AssetID">{disposal.AssetID ?? "-"}</Descriptions.Item>
+                <Descriptions.Item label="Quantity">{disposal.Quantity ?? "-"}</Descriptions.Item>
+                <Descriptions.Item label="Reason">{disposal.Reason || "-"}</Descriptions.Item>
               </Descriptions>
             ) : (
-              <Empty description="Không có dữ liệu bảo trì" />
+              <Empty description="Không có dữ liệu thanh lý" />
             )}
           </Card>
         </Col>
@@ -509,14 +401,7 @@ export default function MaintenanceApprovalPage() {
                 <Timeline
                   items={history.map((h) => {
                     const act = h.Action || h.action;
-                    const color =
-                      act === "CREATED"
-                        ? "gray"
-                        : act === "APPROVED"
-                        ? "green"
-                        : act === "CONFIRMED"
-                        ? "blue"
-                        : "red";
+                    const color = act === "CREATED" ? "gray" : act === "APPROVED" ? "green" : act === "CONFIRMED" ? "blue" : "red";
                     return {
                       color,
                       children: (
@@ -524,15 +409,11 @@ export default function MaintenanceApprovalPage() {
                           <div>
                             <b>{act}</b>{" "}
                             <Text type="secondary">
-                              {fmt(h.ActionAt || h.actionAt)
-                                ? `(${fmt(h.ActionAt || h.actionAt)})`
-                                : ""}
+                              {fmt(h.ActionAt || h.actionAt) ? `(${fmt(h.ActionAt || h.actionAt)})` : ""}
                             </Text>
                           </div>
                           <div>
-                            StepID: {h.StepID ?? "-"} | ApproverUserID:{" "}
-                            {h.ApproverUserID ?? "-"} | Dept:{" "}
-                            {h.DepartmentID ?? "-"}
+                            StepID: {h.StepID ?? "-"} | ApproverUserID: {h.ApproverUserID ?? "-"} | Dept: {h.DepartmentID ?? "-"}
                           </div>
                           {h.Comment ? <div>💬 {h.Comment}</div> : null}
                         </div>

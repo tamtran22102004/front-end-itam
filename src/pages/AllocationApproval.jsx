@@ -1,23 +1,11 @@
+// src/pages/AllocationApprovalPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Card,
-  Space,
-  Button,
-  Table,
-  Tag,
-  Descriptions,
-  Timeline,
-  Typography,
-  Input,
-  message,
-  Row, Col, Divider, Empty
+  Card, Space, Button, Table, Tag, Descriptions, Timeline, Typography, Input,
+  message, Row, Col, Empty, Select
 } from "antd";
 import {
-  ReloadOutlined,
-  EyeOutlined,
-  CheckOutlined,
-  CloseOutlined,
-  SearchOutlined,
+  ReloadOutlined, EyeOutlined, CheckOutlined, CloseOutlined, SearchOutlined
 } from "@ant-design/icons";
 import axios from "axios";
 
@@ -25,23 +13,23 @@ const { Text } = Typography;
 
 const API_URL = import.meta.env.VITE_BACKEND_URL;
 const BASE = `${API_URL}/api/requestallocation`;
+const USERS_API = `${API_URL}/api/getuserinfo`;
+const DEPTS_API = `${API_URL}/api/getdepartment`;
 
-// ===== Helpers =====
 const STEP_ID_BY_ROLE = { IT: 1, MANAGER: 2 };
 const getToken = () => localStorage.getItem("token") || "";
 const withAuth = () => ({ headers: { Authorization: `Bearer ${getToken()}` } });
 
-const normalizeUser = (u) => {
-  if (!u) return null;
-  return {
-    UserID: u.UserID ?? u.userID ?? u.userId ?? u.id ?? null,
-    DepartmentID:
-      u.DepartmentID ?? u.departmentID ?? u.departmentId ?? u.deptId ?? null,
-    Role: String(u.Role ?? u.role ?? "").toUpperCase() || null,
-    FullName: u.FullName ?? u.fullname ?? u.fullName ?? u.name ?? "",
-    Email: u.Email ?? u.email ?? "",
-  };
-};
+const normalizeUser = (u) =>
+  !u
+    ? null
+    : {
+        UserID: Number(u.UserID ?? u.userID ?? u.id ?? u.userId ?? 0),
+        DepartmentID: u.DepartmentID ?? u.departmentID ?? u.deptId ?? null,
+        FullName: u.FullName ?? u.fullname ?? u.fullName ?? u.name ?? "",
+        Email: u.Email ?? u.email ?? "",
+        Role: String(u.Role ?? u.role ?? "").toUpperCase() || null,
+      };
 
 const fmt = (v) => (v ? String(v).replace("T", " ").slice(0, 19) : "");
 
@@ -60,15 +48,13 @@ const stateTag = (st) => {
 };
 
 const canApproveByRole = (state, role) => {
-  if (!state || !role) return false;
-  const r = String(role).toUpperCase();
-  if ((state === "PENDING" || state === "IN_PROGRESS_STEP_1") && r === "IT")
-    return true;
+  const r = String(role || "").toUpperCase();
+  if ((state === "PENDING" || state === "IN_PROGRESS_STEP_1") && r === "IT") return true;
   if (state?.startsWith("IN_PROGRESS_STEP_2") && r === "MANAGER") return true;
   return false;
 };
 
-// List: đọc đúng shape { success, data: { requests: [...] } }
+// List extractor
 const extractRequests = (payload) => {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.data?.requests)) return payload.data.requests;
@@ -76,7 +62,7 @@ const extractRequests = (payload) => {
   return [];
 };
 
-// Detail giữ như cũ (robust với nhiều key)
+// Detail extractor
 const normalizeDetail = (respData) => {
   const root = respData?.data ?? respData ?? {};
   const data = root?.data ?? root;
@@ -97,56 +83,97 @@ const normalizeDetail = (respData) => {
   return { request, allocation, history };
 };
 
-// ===== Page =====
-const AllocationApprovalPage = () => {
-  // User từ localStorage("user")
+export default function AllocationApprovalPage() {
+  // current user
   const [currentUser, setCurrentUser] = useState(null);
   useEffect(() => {
     try {
       const savedUser = localStorage.getItem("user");
-      if (savedUser && savedUser !== "undefined") {
+      if (savedUser && savedUser !== "undefined")
         setCurrentUser(normalizeUser(JSON.parse(savedUser)));
-      } else {
-        setCurrentUser(null);
-      }
-    } catch (err) {
-      console.error("Lỗi parse user:", err);
-      setCurrentUser(null);
-    }
+    } catch {}
   }, []);
 
-  // List
+  // reference data
+  const [users, setUsers] = useState([]); // [{value, label, DepartmentID}]
+  const [usersMap, setUsersMap] = useState({}); // id -> {label, DepartmentID}
+  const [depts, setDepts] = useState([]); // [{value, label}]
+  const [deptsMap, setDeptsMap] = useState({}); // id -> label
+  const [loadingRefs, setLoadingRefs] = useState(false);
+
+  const loadRefs = async () => {
+    setLoadingRefs(true);
+    try {
+      // users
+      const ures = await axios.get(USERS_API, withAuth());
+      const uarr = Array.isArray(ures?.data?.data)
+        ? ures.data.data
+        : Array.isArray(ures?.data)
+        ? ures.data
+        : [];
+      const uopts = uarr.map((u) => {
+        const id = Number(u.UserID);
+        return {
+          value: id,
+          label: u.FullName || `User ${id}`,
+          DepartmentID: u.DepartmentID ?? null,
+        };
+      });
+      const umap = {};
+      uopts.forEach((o) => (umap[o.value] = o));
+      setUsers(uopts);
+      setUsersMap(umap);
+
+      // departments
+      const dres = await axios.get(DEPTS_API, withAuth());
+      const darr = Array.isArray(dres?.data?.data)
+        ? dres.data.data
+        : Array.isArray(dres?.data)
+        ? dres.data
+        : [];
+      const dopts = darr.map((d) => ({
+        value: Number(d.DepartmentID),
+        label: d.DepartmentName || `Dept ${d.DepartmentID}`,
+      }));
+      const dmap = {};
+      dopts.forEach((o) => (dmap[o.value] = o.label));
+      setDepts(dopts);
+      setDeptsMap(dmap);
+    } catch (e) {
+      message.warning("Không tải được dữ liệu Users/Departments.");
+    } finally {
+      setLoadingRefs(false);
+    }
+  };
+
+  // list
   const [loadingList, setLoadingList] = useState(false);
   const [rows, setRows] = useState([]);
   const [searchText, setSearchText] = useState("");
+  const [filterTargetUser, setFilterTargetUser] = useState(null);
+  const [filterTargetDept, setFilterTargetDept] = useState(null);
 
-  // Detail
-  const [loadingDetail, setLoadingDetail] = useState(false);
-  const [detail, setDetail] = useState(null);
-
-  // Approve
-  const [approving, setApproving] = useState(false);
-  const [comment, setComment] = useState("");
-
-  // ===== API calls =====
   const fetchAll = async () => {
+    
     setLoadingList(true);
     try {
       const resp = await axios.get(`${BASE}/getallrequest`, withAuth());
       const list = extractRequests(resp.data).map((r) => ({
         ...r,
-        // BE trả "TotalQuantity": "1" (string) -> ép số cho dễ filter/hiển thị
         TotalQuantity:
           r.TotalQuantity != null ? Number(r.TotalQuantity) : r.TotalQuantity,
       }));
       setRows(list);
     } catch (e) {
-      console.error(e);
       message.error("Không tải được danh sách yêu cầu.");
     } finally {
       setLoadingList(false);
     }
   };
+
+  // detail
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [detail, setDetail] = useState(null);
 
   const fetchDetail = async (id) => {
     setLoadingDetail(true);
@@ -155,7 +182,6 @@ const AllocationApprovalPage = () => {
       if (!resp?.data?.success) throw new Error("API detail không thành công");
       setDetail(normalizeDetail(resp.data));
     } catch (e) {
-      console.error(e);
       message.error("Không tải được chi tiết.");
       setDetail(null);
     } finally {
@@ -164,19 +190,17 @@ const AllocationApprovalPage = () => {
   };
 
   const doAction = async (recordOrDetail, isApprove) => {
-    const req =
-      recordOrDetail?.RequestID
-        ? recordOrDetail
-        : recordOrDetail?.request?.RequestID
-        ? recordOrDetail.request
-        : null;
+    const req = recordOrDetail?.RequestID
+      ? recordOrDetail
+      : recordOrDetail?.request?.RequestID
+      ? recordOrDetail.request
+      : null;
     if (!req) return message.warning("Không xác định được Request để duyệt.");
 
     const role = currentUser?.Role;
     const stepId = STEP_ID_BY_ROLE[role];
     if (!stepId) return message.error("Vai trò hiện tại không hợp lệ.");
 
-    // Lấy state từ detail (nếu có) hoặc từ dòng list
     const currentState =
       detail?.request?.RequestID === req.RequestID
         ? detail.request.CurrentState
@@ -191,48 +215,68 @@ const AllocationApprovalPage = () => {
       ApproverUserID: currentUser?.UserID,
       DepartmentID: currentUser?.DepartmentID ?? 1,
       Action: isApprove ? "APPROVED" : "REJECTED",
-      Comment:
-        comment?.trim() || (isApprove ? "Đồng ý duyệt" : "Từ chối yêu cầu"),
+      Comment: "", // để ngắn gọn; nếu muốn thêm ghi chú có thể thêm TextArea như trước
     };
 
-    setApproving(true);
     try {
-      await axios.post(
-        `${BASE}/approverequest/${req.RequestID}`,
-        payload,
-        withAuth()
-      );
+      await axios.post(`${BASE}/approverequest/${req.RequestID}`, payload, withAuth());
       message.success(isApprove ? "Đã duyệt." : "Đã từ chối.");
-      setComment("");
-      // Refresh list + detail (nếu đang mở)
       await fetchAll();
-      if (detail?.request?.RequestID === req.RequestID) {
-        await fetchDetail(req.RequestID);
-      }
+      if (detail?.request?.RequestID === req.RequestID) await fetchDetail(req.RequestID);
     } catch (e) {
-      console.error(e);
-      message.error("Xử lý duyệt thất bại.");
-    } finally {
-      setApproving(false);
+      message.error(e?.response?.data?.message || "Xử lý duyệt thất bại.");
     }
   };
 
   useEffect(() => {
+    loadRefs();
     fetchAll();
   }, []);
 
-  // ===== Table =====
+  // Helpers: render name by id
+  const userName = (id) => (id && usersMap[id]?.label) || (id ?? "-");
+  const deptName = (id) => (id && deptsMap[id]) || (id ?? "-");
+
   const filteredRows = useMemo(() => {
-    if (!searchText) return rows;
-    const s = searchText.toLowerCase();
-    return rows.filter((r) => {
-      const id = String(r.RequestID || "").toLowerCase();
-      const note = String(r.Note || "").toLowerCase();
-      const state = String(r.CurrentState || "").toLowerCase();
-      const qty = String(r.TotalQuantity ?? "").toLowerCase();
-      return id.includes(s) || note.includes(s) || state.includes(s) || qty.includes(s);
-    });
-  }, [rows, searchText]);
+    let data = rows;
+
+    // text search: id/note/state/qty + target user name + dept name
+    if (searchText) {
+      const s = searchText.toLowerCase();
+      data = data.filter((r) => {
+        const id = String(r.RequestID || "").toLowerCase();
+        const note = String(r.Note || "").toLowerCase();
+        const state = String(r.CurrentState || "").toLowerCase();
+        const qty = String(r.TotalQuantity ?? "").toLowerCase();
+
+        const tu = r.TargetUserID;
+        const td = r.TargetDepartmentID;
+        const tuName = String(userName(tu)).toLowerCase();
+        const tdName = String(deptName(td)).toLowerCase();
+
+        return (
+          id.includes(s) ||
+          note.includes(s) ||
+          state.includes(s) ||
+          qty.includes(s) ||
+          tuName.includes(s) ||
+          tdName.includes(s)
+        );
+      });
+    }
+
+    // filter by target user
+    if (filterTargetUser != null) {
+      data = data.filter((r) => Number(r.TargetUserID) === Number(filterTargetUser));
+    }
+
+    // filter by target department
+    if (filterTargetDept != null) {
+      data = data.filter((r) => Number(r.TargetDepartmentID) === Number(filterTargetDept));
+    }
+
+    return data;
+  }, [rows, searchText, filterTargetUser, filterTargetDept]);
 
   const columns = [
     { title: "ID", dataIndex: "RequestID", key: "RequestID", width: 90 },
@@ -240,27 +284,54 @@ const AllocationApprovalPage = () => {
       title: "Requester",
       dataIndex: "RequesterUserID",
       key: "RequesterUserID",
-      width: 110,
+      width: 180,
+      render: (v) => (
+        <span>
+          <b>{userName(v)}</b> <Tag style={{ marginLeft: 6 }}>{v ?? "-"}</Tag>
+        </span>
+      ),
+    },
+    {
+      title: "Người nhận",
+      dataIndex: "TargetUserID",
+      key: "TargetUserID",
+      width: 220,
+      render: (v) => (
+        <span>
+          <b>{userName(v)}</b> <Tag style={{ marginLeft: 6 }}>{v ?? "-"}</Tag>
+        </span>
+      ),
+    },
+    {
+      title: "Phòng nhận",
+      dataIndex: "TargetDepartmentID",
+      key: "TargetDepartmentID",
+      width: 200,
+      render: (v) => (
+        <span>
+          <b>{deptName(v)}</b> <Tag style={{ marginLeft: 6 }}>{v ?? "-"}</Tag>
+        </span>
+      ),
     },
     {
       title: "Trạng thái",
       dataIndex: "CurrentState",
       key: "CurrentState",
-      width: 170,
+      width: 160,
       render: (st) => stateTag(st),
     },
     {
-      title: "Số lượng (tổng)",
+      title: "Số lượng",
       dataIndex: "TotalQuantity",
       key: "TotalQuantity",
-      width: 140,
+      width: 110,
       render: (v) => (v == null ? 0 : v),
     },
     {
       title: "CreatedAt",
       dataIndex: "CreatedAt",
       key: "CreatedAt",
-      width: 180,
+      width: 170,
       render: (v) => fmt(v),
     },
     {
@@ -272,19 +343,16 @@ const AllocationApprovalPage = () => {
     {
       title: "Actions",
       key: "actions",
+      fixed: "right",
       width: 260,
       render: (_, record) => (
         <Space>
-          <Button
-            icon={<EyeOutlined />}
-            onClick={() => fetchDetail(record.RequestID)}
-          >
+          <Button icon={<EyeOutlined />} onClick={() => fetchDetail(record.RequestID)}>
             Xem
           </Button>
           <Button
             type="primary"
             icon={<CheckOutlined />}
-            loading={approving}
             disabled={
               !currentUser ||
               !canApproveByRole(record.CurrentState, currentUser.Role) ||
@@ -298,7 +366,6 @@ const AllocationApprovalPage = () => {
           <Button
             danger
             icon={<CloseOutlined />}
-            loading={approving}
             disabled={
               !currentUser ||
               !canApproveByRole(record.CurrentState, currentUser.Role) ||
@@ -317,82 +384,126 @@ const AllocationApprovalPage = () => {
   const request = detail?.request;
   const allocation = detail?.allocation;
   const history = detail?.history || [];
+  const stepId = STEP_ID_BY_ROLE[currentUser?.Role];
 
   return (
-  <Space direction="vertical" size="large" style={{ width: "100%" }}>
-    {/* ====== TOP: Filter bar ====== */}
-    <Card size="small">
-      <Space wrap>
-        <Input
-          style={{ width: 320 }}
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          prefix={<SearchOutlined />}
-          placeholder="Tìm theo ID / Note / Trạng thái / Số lượng"
-          allowClear
+    <Space direction="vertical" size="large" style={{ width: "100%" }}>
+      {/* Filter bar */}
+      <Card size="small">
+        <Space wrap>
+          <Input
+            style={{ width: 300 }}
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            prefix={<SearchOutlined />}
+            placeholder="Tìm ID / Note / Trạng thái / User / Phòng"
+            allowClear
+          />
+          <Select
+            style={{ width: 220 }}
+            allowClear
+            loading={loadingRefs}
+            placeholder="Lọc theo Người nhận"
+            options={users}
+            value={filterTargetUser}
+            onChange={setFilterTargetUser}
+            showSearch
+            optionFilterProp="label"
+          />
+          <Select
+            style={{ width: 220 }}
+            allowClear
+            loading={loadingRefs}
+            placeholder="Lọc theo Phòng nhận"
+            options={depts}
+            value={filterTargetDept}
+            onChange={setFilterTargetDept}
+            showSearch
+            optionFilterProp="label"
+          />
+          <Button icon={<ReloadOutlined />} onClick={() => { fetchAll(); loadRefs(); }}>
+            Refresh
+          </Button>
+          <Tag>Vai trò: <b>{currentUser?.Role || "-"}</b></Tag>
+          <Tag>StepID: <b>{stepId ?? "-"}</b></Tag>
+        </Space>
+      </Card>
+
+      {/* Danh sách */}
+      <Card title="Danh sách yêu cầu" size="small" bodyStyle={{ paddingTop: 0 }}>
+        <Table
+          rowKey={(r, idx) => r?.RequestID ?? idx}
+          loading={loadingList}
+          dataSource={filteredRows}
+          columns={columns}
+          size="middle"
+          sticky
+          scroll={{ x: 1100, y: 420 }}
+          pagination={{ pageSize: 10, showSizeChanger: false }}
         />
-        <Button icon={<ReloadOutlined />} onClick={fetchAll}>
-          Refresh
-        </Button>
-        <Tag>Vai trò: <b>{currentUser?.Role || "-"}</b></Tag>
-        <Tag>StepID: <b>{STEP_ID_BY_ROLE[currentUser?.Role] ?? "-"}</b></Tag>
-      </Space>
-    </Card>
+      </Card>
 
-    {/* ====== TOP: Danh sách yêu cầu (full width) ====== */}
-    <Card title="Danh sách yêu cầu" size="small" bodyStyle={{ paddingTop: 0 }}>
-      <Table
-        rowKey={(r, idx) => r?.RequestID ?? idx}
-        loading={loadingList}
-        dataSource={filteredRows}
-        columns={columns}
-        size="middle"
-        sticky
-        scroll={{ y: 420 }}        // tùy chỉnh chiều cao bảng
-        pagination={{ pageSize: 10, showSizeChanger: false }}
-      />
-    </Card>
+      {/* Chi tiết + duyệt */}
+      <Row gutter={[16, 16]}>
+        {/* Thông tin yêu cầu */}
+        <Col xs={24} md={8}>
+          <Card title="Thông tin yêu cầu" size="small" loading={loadingDetail}>
+            {request ? (
+              <Descriptions bordered size="small" column={1}>
+                <Descriptions.Item label="RequestID">
+                  {request.RequestID}
+                </Descriptions.Item>
+                <Descriptions.Item label="Loại">
+                  Allocation (Cấp phát)
+                </Descriptions.Item>
+                <Descriptions.Item label="Requester">
+                  <b>{userName(request.RequesterUserID)}</b>{" "}
+                  <Tag style={{ marginLeft: 6 }}>{request.RequesterUserID ?? "-"}</Tag>
+                </Descriptions.Item>
+                <Descriptions.Item label="Người nhận">
+                  <b>{userName(request.TargetUserID)}</b>{" "}
+                  <Tag style={{ marginLeft: 6 }}>{request.TargetUserID ?? "-"}</Tag>
+                </Descriptions.Item>
+                <Descriptions.Item label="Phòng nhận">
+                  <b>{deptName(request.TargetDepartmentID)}</b>{" "}
+                  <Tag style={{ marginLeft: 6 }}>{request.TargetDepartmentID ?? "-"}</Tag>
+                </Descriptions.Item>
+                <Descriptions.Item label="Trạng thái">
+                  {stateTag(request.CurrentState)}
+                </Descriptions.Item>
+                <Descriptions.Item label="Note">
+                  {request.Note || "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label="CreatedAt">
+                  {fmt(request.CreatedAt)}
+                </Descriptions.Item>
+                <Descriptions.Item label="UpdatedAt">
+                  {fmt(request.UpdatedAt)}
+                </Descriptions.Item>
+              </Descriptions>
+            ) : (
+              <Empty description="Chọn bản ghi ở danh sách phía trên để xem" />
+            )}
+          </Card>
 
-    {/* ====== BELOW: 3 CỘT chi tiết ====== */}
-    <Row gutter={[16, 16]}>
-      {/* CỘT 1: Thông tin yêu cầu */}
-      <Col xs={24} md={8}>
-        <Card title="Thông tin yêu cầu" size="small" loading={loadingDetail}>
-          {request ? (
-            <Descriptions bordered size="small" column={1}>
-              <Descriptions.Item label="RequestID">{request.RequestID}</Descriptions.Item>
-              <Descriptions.Item label="Loại">Allocation (Cấp phát)</Descriptions.Item>
-              <Descriptions.Item label="RequesterUserID">{request.RequesterUserID}</Descriptions.Item>
-              <Descriptions.Item label="Trạng thái">{stateTag(request.CurrentState)}</Descriptions.Item>
-              <Descriptions.Item label="Note">{request.Note || "-"}</Descriptions.Item>
-              <Descriptions.Item label="CreatedAt">{fmt(request.CreatedAt)}</Descriptions.Item>
-              <Descriptions.Item label="UpdatedAt">{fmt(request.UpdatedAt)}</Descriptions.Item>
-            </Descriptions>
-          ) : (
-            <Empty description="Chọn bản ghi ở danh sách phía trên để xem" />
-          )}
-        </Card>
-        <Card title="Chi tiết cấp phát" size="small" loading={loadingDetail}>
-          {allocation ? (
-            <Descriptions bordered size="small" column={1}>
-              <Descriptions.Item label="AssetID">
-                {allocation.AssetID ?? allocation.assetId ?? "-"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Quantity">
-                {allocation.Quantity ?? allocation.quantity ?? "-"}
-              </Descriptions.Item>
-            </Descriptions>
-          ) : (
-            <Empty description="Không có dữ liệu cấp phát" />
-          )}
-        </Card>
-      </Col>
+          <Card title="Chi tiết cấp phát" size="small" loading={loadingDetail}>
+            {allocation ? (
+              <Descriptions bordered size="small" column={1}>
+                <Descriptions.Item label="AssetID">
+                  {allocation.AssetID ?? "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label="Quantity">
+                  {allocation.Quantity ?? "-"}
+                </Descriptions.Item>
+              </Descriptions>
+            ) : (
+              <Empty description="Không có dữ liệu cấp phát" />
+            )}
+          </Card>
+        </Col>
 
-      
-
-      {/* CỘT 3: Nhật ký + Duyệt */}
-      <Col xs={24} md={8}>
-        <Space direction="vertical" size="small" style={{ width: "100%" }}>
+        {/* Nhật ký */}
+        <Col xs={24} md={8}>
           <Card title="Nhật ký phê duyệt" size="small" loading={loadingDetail}>
             {history?.length ? (
               <div style={{ maxHeight: 300, overflow: "auto", paddingRight: 6 }}>
@@ -400,9 +511,13 @@ const AllocationApprovalPage = () => {
                   items={history.map((h) => {
                     const act = h.Action || h.action;
                     const color =
-                      act === "CREATED" ? "gray" :
-                      act === "APPROVED" ? "green" :
-                      act === "CONFIRMED" ? "blue" : "red";
+                      act === "CREATED"
+                        ? "gray"
+                        : act === "APPROVED"
+                        ? "green"
+                        : act === "CONFIRMED"
+                        ? "blue"
+                        : "red";
                     return {
                       color,
                       children: (
@@ -416,11 +531,11 @@ const AllocationApprovalPage = () => {
                             </Text>
                           </div>
                           <div>
-                            StepID: {h.StepID ?? h.stepId ?? "-"} | ApproverUserID:{" "}
-                            {h.ApproverUserID ?? h.approverUserId ?? "-"} | Dept:{" "}
-                            {h.DepartmentID ?? h.departmentId ?? "-"}
+                            StepID: {h.StepID ?? "-"} | ApproverUserID:{" "}
+                            {h.ApproverUserID ?? "-"} | Dept:{" "}
+                            {h.DepartmentID ?? "-"}
                           </div>
-                          {(h.Comment || h.comment) ? <div>💬 {h.Comment || h.comment}</div> : null}
+                          {h.Comment ? <div>💬 {h.Comment}</div> : null}
                         </div>
                       ),
                     };
@@ -431,62 +546,44 @@ const AllocationApprovalPage = () => {
               <Empty description="Chưa có lịch sử" />
             )}
           </Card>
+        </Col>
 
-          
-        </Space>
-      </Col>
-      {/* CỘT 2: Chi tiết cấp phát */}
-      <Col xs={24} md={8}>
-        <Card title="Thao tác duyệt" size="small">
-            <Space direction="vertical" style={{ width: "100%" }}>
-              <Input.TextArea
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="Ghi chú khi duyệt / từ chối (tuỳ chọn)"
-                rows={3}
-                maxLength={500}
-              />
-              <Space wrap>
-                <Button
-                  type="primary"
-                  icon={<CheckOutlined />}
-                  loading={approving}
-                  disabled={
-                    !request ||
-                    !currentUser ||
-                    !canApproveByRole(request?.CurrentState, currentUser?.Role) ||
-                    request?.CurrentState === "APPROVED" ||
-                    request?.CurrentState === "REJECTED"
-                  }
-                  onClick={() => doAction(detail, true)}
-                >
-                  Duyệt
-                </Button>
-                <Button
-                  danger
-                  icon={<CloseOutlined />}
-                  loading={approving}
-                  disabled={
-                    !request ||
-                    !currentUser ||
-                    !canApproveByRole(request?.CurrentState, currentUser?.Role) ||
-                    request?.CurrentState === "APPROVED" ||
-                    request?.CurrentState === "REJECTED"
-                  }
-                  onClick={() => doAction(detail, false)}
-                >
-                  Từ chối
-                </Button>
-              </Space>
+        {/* Thao tác duyệt */}
+        <Col xs={24} md={8}>
+          <Card title="Thao tác duyệt" size="small">
+            <Space wrap>
+              <Button
+                type="primary"
+                icon={<CheckOutlined />}
+                disabled={
+                  !detail?.request ||
+                  !currentUser ||
+                  !canApproveByRole(detail?.request?.CurrentState, currentUser?.Role) ||
+                  detail?.request?.CurrentState === "APPROVED" ||
+                  detail?.request?.CurrentState === "REJECTED"
+                }
+                onClick={() => doAction(detail, true)}
+              >
+                Duyệt
+              </Button>
+              <Button
+                danger
+                icon={<CloseOutlined />}
+                disabled={
+                  !detail?.request ||
+                  !currentUser ||
+                  !canApproveByRole(detail?.request?.CurrentState, currentUser?.Role) ||
+                  detail?.request?.CurrentState === "APPROVED" ||
+                  detail?.request?.CurrentState === "REJECTED"
+                }
+                onClick={() => doAction(detail, false)}
+              >
+                Từ chối
+              </Button>
             </Space>
           </Card>
-      </Col>
-    </Row>
-  </Space>
-);
-
-
-
-};
-
-export default AllocationApprovalPage;
+        </Col>
+      </Row>
+    </Space>
+  );
+}

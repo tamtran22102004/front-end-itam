@@ -15,14 +15,17 @@ import AssetPage from "../pages/Asset";
 import AssetConfigPage from "../pages/AssetConfig";
 import AssetDetailPage from "../pages/AssetDetail";
 import AllocationApprovalPage from "../pages/AllocationApproval";
+import WarrantyApprovalPage from "../pages/WarrantyApproval";
 import RequestPage from "../pages/Request";
 import AssetHistoryPage from "../pages/AssetHistory";
+import ScheduleMaintenancePage from "../pages/ScheduleMaintenance";
+import ScheduleWorkOrderPage from "../pages/ScheduleWorkOrder";
+import DisposalApprovalPage from "../pages/DisposalApproval";
 const router = createBrowserRouter([
   {
     path: "/",
     element: <AppLayout />,
     children: [
-      
       { path: "login", element: <LoginPage /> },
       { path: "register", element: <RegisterPage /> },
       {
@@ -53,7 +56,7 @@ const router = createBrowserRouter([
         path: "item",
         element: (
           <PrivateRoute>
-            < ItemMasterPage/>
+            <ItemMasterPage />
           </PrivateRoute>
         ),
       },
@@ -61,7 +64,7 @@ const router = createBrowserRouter([
         path: "asset",
         element: (
           <PrivateRoute>
-            < AssetPage/>
+            <AssetPage />
           </PrivateRoute>
         ),
       },
@@ -69,7 +72,7 @@ const router = createBrowserRouter([
         path: "assetconfig",
         element: (
           <PrivateRoute>
-            < AssetConfigPage/>
+            <AssetConfigPage />
           </PrivateRoute>
         ),
       },
@@ -77,15 +80,15 @@ const router = createBrowserRouter([
         path: "assetdetail/:id",
         element: (
           <PrivateRoute>
-            < AssetDetailPage/>
+            <AssetDetailPage />
           </PrivateRoute>
         ),
       },
       {
-        path: "requestapproval",
+        path: "requestallocation",
         element: (
           <PrivateRoute>
-            < AllocationApprovalPage/>
+            <AllocationApprovalPage />
           </PrivateRoute>
         ),
       },
@@ -93,7 +96,7 @@ const router = createBrowserRouter([
         path: "request",
         element: (
           <PrivateRoute>
-            < RequestPage/>
+            <RequestPage />
           </PrivateRoute>
         ),
       },
@@ -101,14 +104,49 @@ const router = createBrowserRouter([
         path: "assethistory",
         element: (
           <PrivateRoute>
-            < AssetHistoryPage/>
+            <AssetHistoryPage />
           </PrivateRoute>
         ),
       },
-      { path: "requestmaintenance", element:
-        <PrivateRoute>
-          <MaintenanceApprovalPage />
-        </PrivateRoute>
+      {
+        path: "requestmaintenance",
+        element: (
+          <PrivateRoute>
+            <MaintenanceApprovalPage />
+          </PrivateRoute>
+        ),
+      },
+      {
+        path: "schedulemaintenance",
+        element: (
+          <PrivateRoute>
+            <ScheduleMaintenancePage />
+          </PrivateRoute>
+        ),
+      },
+      {
+        path: "scheduleworkorder",
+        element: (
+          <PrivateRoute>
+            <ScheduleWorkOrderPage />
+          </PrivateRoute>
+        ),
+      },
+      {
+        path: "requestwarranty",
+        element: (
+          <PrivateRoute>
+            <WarrantyApprovalPage />
+          </PrivateRoute>
+        ),
+      },
+      {
+        path: "requestdisposal",
+        element: (
+          <PrivateRoute>
+            <DisposalApprovalPage />
+          </PrivateRoute>
+        ),
       },
     ],
   },
