@@ -1,3 +1,4 @@
+// src/pages/AssetDetailPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Card,
@@ -20,6 +21,7 @@ import {
   DatePicker,
   InputNumber,
 } from "antd";
+import { Typography } from "antd";
 import {
   EditOutlined,
   DeleteOutlined,
@@ -33,8 +35,12 @@ import {
 import axios from "axios";
 import dayjs from "dayjs";
 import { useParams, useNavigate } from "react-router-dom";
-import AssetQrSection from "../components/form/AssetQrSection";
+// thêm các import dưới cùng nhóm import hiện có
+import QrPreviewModal from "../components/assets/QrPreviewModal";
+import { QrcodeOutlined, DownloadOutlined } from "@ant-design/icons";
+
 const { Option } = Select;
+const { Title } = Typography;
 
 // --- JS thuần, KHÔNG TypeScript annotation ---
 const STATUS_MAP = {
@@ -76,9 +82,6 @@ const AssetDetailPage = () => {
   const [categories, setCategories] = useState([]);
   const [itemMasters, setItemMasters] = useState([]);
   const [vendors, setVendors] = useState([]);
-  // Nếu chưa có API users/departments thì giữ nguyên input number
-  // const [users, setUsers] = useState([]);
-  // const [departments, setDepartments] = useState([]);
 
   // global attributes (add modal)
   const [allAttributes, setAllAttributes] = useState([]);
@@ -99,6 +102,44 @@ const AssetDetailPage = () => {
   const [currentManageType, setCurrentManageType] = useState(null);
   const [employees, setEmployees] = useState([]); // mảng { value, label }
   const [departments, setDepartments] = useState([]);
+  // State cho modal xem QR (giống AssetPage)
+  const [qrState, setQrState] = useState({
+    open: false,
+    assetId: null,
+    token: null,
+    pngBase64: null, // ⬅️ thêm
+    title: "",
+  });
+
+  // Gọi API mint-qr rồi mở modal preview
+  const showQr = async (force = false) => {
+    if (!id) return; // id lấy từ useParams()
+    try {
+      const url = `${API_URL}/api/qr/${id}/mint-qr${force ? "?force=1" : ""}`;
+      const resp = await axios.post(
+        url,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+          },
+        }
+      );
+
+      const { token, pngBase64 } = resp?.data?.data || {};
+      if (!token) throw new Error("Mint QR không trả về token");
+
+      setQrState({
+        open: true,
+        assetId: id, // ⬅️ để tạo link tải PNG
+        token,
+        pngBase64: pngBase64 || null, // ⬅️ xem ngay không cần GET nữa
+        title: asset?.Name || asset?.ManageCode || `Asset#${id}`,
+      });
+    } catch (e) {
+      message.error(e?.response?.data?.message || "Không tạo/hiển thị được QR");
+    }
+  };
 
   // ===== fetchers =====
   const fetchDetail = async () => {
@@ -143,8 +184,7 @@ const AssetDetailPage = () => {
       setVendors(res.data?.data || []);
     } catch {}
   };
-  // fetch employees
-  // --- fetchers ---
+
   const fetchEmployees = async () => {
     try {
       const res = await axios.get(`${API_URL}/api/getuserinfo`);
@@ -170,9 +210,6 @@ const AssetDetailPage = () => {
       console.error(err);
     }
   };
-  // Nếu có API:
-  // const fetchUsers = async () => { ... };
-  // const fetchDepartments = async () => { ... };
 
   const fetchAllAttributes = async () => {
     setAttrLoading(true);
@@ -201,7 +238,9 @@ const AssetDetailPage = () => {
   // Mở modal Edit: đổ form + suy ra ManageType
   const openEditModal = () => {
     if (!asset) return;
-    const im = itemMasters.find((i) => i.ID === asset.ItemMasterID);
+    const im = itemMasters.find(
+      (i) => String(i.ID) === String(asset.ItemMasterID)
+    );
     const mt = im?.ManageType || null;
     setCurrentManageType(mt);
 
@@ -230,7 +269,7 @@ const AssetDetailPage = () => {
 
   // Khi đổi ItemMaster trong modal edit
   const onEditIMChange = (val) => {
-    const im = itemMasters.find((i) => i.ID === val);
+    const im = itemMasters.find((i) => String(i.ID) === String(val));
     const mt = im?.ManageType || null;
     setCurrentManageType(mt);
     if (im?.CategoryID) {
@@ -480,7 +519,6 @@ const AssetDetailPage = () => {
 
   return (
     <div className="p-4">
-      
       <Card
         title={
           <Space wrap>
@@ -546,8 +584,26 @@ const AssetDetailPage = () => {
               <Descriptions.Item label="Số lượng">
                 {asset.Quantity ?? "—"}
               </Descriptions.Item>
-              <Descriptions.Item label="QR Code">
-                {asset.QRCode || "—"}
+              <Descriptions.Item label="Mã QR">
+              <Space wrap>
+                
+                <Button
+                  size="small"
+                  icon={<QrcodeOutlined />}
+                  onClick={() => showQr(false)}
+                >
+                  Xem QR
+                </Button>
+                <a
+                  href={`${API_URL}/api/qr/${asset.ID}/qr.png`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <Button size="small" icon={<DownloadOutlined />}>
+                    Tải PNG
+                  </Button>
+                </a>
+              </Space>
               </Descriptions.Item>
             </Descriptions>
           </Col>
@@ -898,7 +954,24 @@ const AssetDetailPage = () => {
           </Row>
         </Form>
       </Modal>
-      
+      <QrPreviewModal
+        open={qrState.open}
+        title={qrState.title}
+        // Truyền đủ dữ liệu để modal tự chọn nguồn ảnh
+        token={qrState.token}
+        assetId={qrState.assetId}
+        pngBase64={qrState.pngBase64}
+        onClose={() =>
+          setQrState({
+            open: false,
+            assetId: null,
+            token: null,
+            pngBase64: null,
+            title: "",
+          })
+        }
+        size={512}
+      />
     </div>
   );
 };
