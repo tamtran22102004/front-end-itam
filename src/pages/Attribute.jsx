@@ -1,3 +1,4 @@
+// src/pages/AttributePage.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Button,
@@ -10,6 +11,10 @@ import {
   Form,
   Input,
   Select,
+  Tag,
+  Tooltip,
+  Typography,
+  Empty,
 } from "antd";
 import {
   PlusOutlined,
@@ -19,31 +24,68 @@ import {
 } from "@ant-design/icons";
 import axios from "axios";
 
-const { Option } = Select;
+const { Text } = Typography;
 const API_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/attribute`;
 
-const AttributePage = () => {
+// Rút gọn ID hiển thị như HistoryTable
+const shortId = (id) => {
+  if (!id && id !== 0) return "—";
+  const s = String(id);
+  if (s.length <= 12) return s;
+  return `${s.slice(0, 8)}…${s.slice(-4)}`;
+};
+
+// Chuẩn hoá 1 row bất kể BE trả key kiểu gì
+const normalizeRow = (r) => ({
+  ID: r?.ID ?? r?.id ?? r?.Id ?? r?.attributeId ?? r?.AttributeID,
+  Name: r?.Name ?? r?.name ?? r?.NAME ?? "",
+  MeasurementUnit:
+    r?.MeasurementUnit ?? r?.measurementUnit ?? r?.measurementunit ?? "",
+});
+
+const normalizeList = (raw) => {
+  const arr = Array.isArray(raw) ? raw : Object.values(raw || {});
+  return arr.map(normalizeRow);
+};
+
+export default function AttributePage() {
   const [form] = Form.useForm();
+
+  // ===== State =====
   const [attributes, setAttributes] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [openModal, setOpenModal] = useState(false);
   const [editing, setEditing] = useState(null);
 
-  // Pagination state tách riêng để control khi lọc
-  const [pagination, setPagination] = useState({ current: 1, pageSize: 6 });
+  // Table
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
 
-  // ====== FILTER STATE (mới) ======
-  const [kw, setKw] = useState("");          // từ khóa tìm kiếm
-  const [unit, setUnit] = useState(null);    // đơn vị đo được chọn
+  // Filter bar
+  const [kw, setKw] = useState("");
+  const [unit, setUnit] = useState(null);
 
-  // Lấy danh sách thuộc tính
+  // ===== Helpers =====
+  const getAuth = () => {
+    const token = localStorage.getItem("token") || "";
+    return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+  };
+
+  // ===== API =====
   const fetchAttributes = async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`${API_BASE}/attributeDetail`);
-      const data = Array.isArray(res.data?.data)
-        ? res.data.data
-        : Object.values(res.data?.data || {});
+      // Chuẩn route chính: GET /api/attribute
+      let res = await axios.get(`${API_BASE}/attributeDetail`, getAuth());
+      let raw = res?.data?.data ?? res?.data;
+      let data = normalizeList(raw);
+
+      // Fallback nếu backend cũ dùng /attributeDetail
+      if (!data.length) {
+        const res2 = await axios.get(`${API_BASE}/attributeDetail`, getAuth());
+        const raw2 = res2?.data?.data ?? res2?.data;
+        data = normalizeList(raw2);
+      }
       setAttributes(data);
     } catch (err) {
       console.error(err);
@@ -55,114 +97,179 @@ const AttributePage = () => {
 
   useEffect(() => {
     fetchAttributes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ====== Tập đơn vị đo duy nhất cho Select filter ======
+  // ===== Unit options =====
   const unitOptions = useMemo(() => {
     const set = new Set(
       (attributes || [])
-        .map((a) => (a.MeasurementUnit || "").trim())
+        .map((a) => (a?.MeasurementUnit || "").trim())
         .filter(Boolean)
     );
     return Array.from(set);
   }, [attributes]);
 
-  // ====== Áp dụng filter client-side ======
+  // ===== Filtered data =====
   const filteredData = useMemo(() => {
     const q = kw.trim().toLowerCase();
     return (attributes || []).filter((a) => {
-      const byKw = !q
-        ? true
-        : (a.Name || "").toLowerCase().includes(q) ||
-          (a.MeasurementUnit || "").toLowerCase().includes(q);
-      const byUnit = !unit ? true : (a.MeasurementUnit || "") === unit;
+      const name = (a?.Name || "").toLowerCase();
+      const mu = (a?.MeasurementUnit || "").toLowerCase();
+      const byKw = !q ? true : name.includes(q) || mu.includes(q);
+      const byUnit = !unit ? true : (a?.MeasurementUnit || "") === unit;
       return byKw && byUnit;
     });
   }, [attributes, kw, unit]);
 
-  // Reset về trang 1 mỗi khi thay đổi filter
+  // Reset trang khi đổi filter
   useEffect(() => {
     setPagination((p) => ({ ...p, current: 1 }));
   }, [kw, unit]);
 
-  // Submit form (add / update)
+  // ===== Modal mở -> đổ form =====
+  useEffect(() => {
+    if (!openModal) return;
+    if (editing) {
+      form.setFieldsValue({
+        Name: editing.Name ?? "",
+        MeasurementUnit: editing.MeasurementUnit || undefined,
+      });
+    } else {
+      form.resetFields();
+    }
+  }, [openModal, editing, form]);
+
+  // ===== Submit (add / update) =====
   const onFinish = async (values) => {
+    const payload = {
+      name: values?.Name?.trim(),
+      // Tránh gửi null nếu DB NOT NULL
+      measurementUnit: values?.MeasurementUnit?.trim() || "",
+    };
+
+    if (!payload.name) {
+      message.warning("Vui lòng nhập tên thuộc tính hợp lệ");
+      return;
+    }
+
+    setSaving(true);
     try {
       if (editing) {
-        await axios.post(`${API_BASE}/update/${editing.ID}`, values);
-        message.success("Cập nhật thành công");
+        const id = editing.ID ?? editing.id;
+        if (!id) {
+          message.error("Không xác định được ID bản ghi để cập nhật");
+          return;
+        }
+        await axios.post(`${API_BASE}/update/${id}`, payload, getAuth());
+        message.success("Cập nhật thuộc tính thành công");
       } else {
-        await axios.post(`${API_BASE}/add`, values);
+        await axios.post(`${API_BASE}/add`, payload, getAuth());
         message.success("Thêm thuộc tính thành công");
       }
       setOpenModal(false);
-      form.resetFields();
       setEditing(null);
+      form.resetFields();
       fetchAttributes();
     } catch (err) {
       console.error(err);
-      message.error("Không thể lưu thuộc tính");
+      message.error(
+        err?.response?.data?.message ||
+          "Không thể lưu thuộc tính. Vui lòng thử lại."
+      );
+    } finally {
+      setSaving(false);
     }
   };
 
-  // Xóa
-  const handleDelete = async (id) => {
+  // ===== Delete =====
+  const handleDelete = async (record) => {
+    const id = record?.ID ?? record?.id;
+    if (!id) return message.error("Không xác định được ID để xoá");
     try {
-      await axios.delete(`${API_BASE}/delete/${id}`);
-      message.success("Đã xóa");
+      await axios.delete(`${API_BASE}/delete/${id}`, getAuth());
+      message.success("Đã xoá thuộc tính");
       fetchAttributes();
     } catch (err) {
       console.error(err);
-      message.error("Xóa thất bại");
+      message.error(err?.response?.data?.message || "Xoá thất bại.");
     }
   };
 
+  // ===== Columns (phong cách HistoryTable) =====
   const columns = [
     {
-      title: "Tên thuộc tính",
-      dataIndex: "Name",
-      key: "Name",
-      render: (text) => text,
+      title: "Thuộc tính",
+      key: "attr",
+      width: 360,
+      sorter: (a, b) => (a.Name || "").localeCompare(b.Name || ""),
+      defaultSortOrder: "ascend",
+      render: (_, r) => (
+        <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.6 }}>
+          <span style={{ fontWeight: 600 }}>{r.Name || "—"}</span>
+          <Space size={6}>
+            <Tooltip title={r.ID}>
+            </Tooltip>
+            {/* Có thể chèn nút điều hướng khác nếu cần sau này */}
+          </Space>
+        </div>
+      ),
     },
     {
       title: "Đơn vị đo",
       dataIndex: "MeasurementUnit",
       key: "MeasurementUnit",
-      render: (text) => text || <span style={{ color: "#999" }}>—</span>,
       width: 200,
+      sorter: (a, b) =>
+        (a.MeasurementUnit || "").localeCompare(b.MeasurementUnit || ""),
+      render: (v) =>
+        v ? (
+          <Tag>{v}</Tag>
+        ) : (
+          <span style={{ color: "#999" }}>—</span>
+        ),
+      filters: unitOptions.map((u) => ({ text: u, value: u })),
+      onFilter: (val, r) => (r.MeasurementUnit || "") === val,
     },
     {
       title: "Thao tác",
       key: "actions",
       align: "center",
-      width: 150,
+      width: 160,
       render: (_, record) => (
         <Space>
-          <Button
-            icon={<EditOutlined />}
-            onClick={() => {
-              setEditing(record);
-              form.setFieldsValue(record);
-              setOpenModal(true);
-            }}
-          />
+          <Tooltip title="Sửa">
+            <Button
+              icon={<EditOutlined />}
+              onClick={() => {
+                setEditing(record);
+                setOpenModal(true);
+              }}
+            />
+          </Tooltip>
           <Popconfirm
-            title="Xác nhận xoá?"
-            okText="Xóa"
+            title="Bạn chắc muốn xoá thuộc tính này?"
+            okText="Xoá"
             cancelText="Hủy"
-            onConfirm={() => handleDelete(record.ID)}
+            onConfirm={() => handleDelete(record)}
           >
             <Button danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
       ),
+      fixed: "right",
     },
   ];
 
-  // Nút bỏ lọc
+  // ===== UI helpers =====
   const clearFilters = () => {
     setKw("");
     setUnit(null);
+  };
+
+  const openCreate = () => {
+    setEditing(null);
+    setOpenModal(true);
   };
 
   return (
@@ -173,21 +280,13 @@ const AttributePage = () => {
           <Button icon={<ReloadOutlined />} onClick={fetchAttributes}>
             Làm mới
           </Button>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => {
-              setEditing(null);
-              form.resetFields();
-              setOpenModal(true);
-            }}
-          >
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
             Thêm mới
           </Button>
         </Space>
       }
     >
-      {/* ====== Thanh lọc (filter bar) ====== */}
+      {/* Filter bar */}
       <div
         style={{
           marginBottom: 12,
@@ -222,24 +321,30 @@ const AttributePage = () => {
         </div>
       </div>
 
-      {/* Bảng dữ liệu */}
+      {/* Table */}
       <Table
-        rowKey="ID"
+        rowKey={(r) => r.ID ?? r.id}
         bordered
+        size="middle"
         columns={columns}
         dataSource={filteredData}
         loading={loading}
         pagination={{
           ...pagination,
           total: filteredData.length,
-          onChange: (page, pageSize) =>
-            setPagination({ current: page, pageSize }),
+          onChange: (page, pageSize) => setPagination({ current: page, pageSize }),
           showSizeChanger: true,
           pageSizeOptions: ["5", "10", "20"],
         }}
+        locale={{
+          emptyText: (
+            <Empty description="Chưa có thuộc tính nào. Nhấn 'Thêm mới' để tạo." />
+          ),
+        }}
+        scroll={{ x: 900 }}
       />
 
-      {/* Modal thêm / sửa */}
+      {/* Modal Add/Edit */}
       <Modal
         title={editing ? "Cập nhật thuộc tính" : "Thêm thuộc tính mới"}
         open={openModal}
@@ -249,7 +354,7 @@ const AttributePage = () => {
         }}
         footer={null}
         destroyOnClose
-        width={500}
+        width={520}
       >
         <Form
           form={form}
@@ -260,22 +365,35 @@ const AttributePage = () => {
           <Form.Item
             label="Tên thuộc tính"
             name="Name"
-            rules={[{ required: true, message: "Vui lòng nhập tên thuộc tính" }]}
+            rules={[
+              { required: true, message: "Vui lòng nhập tên thuộc tính" },
+              { max: 100, message: "Tối đa 100 ký tự" },
+            ]}
           >
-            <Input placeholder="VD: RAM, CPU, Kích thước màn hình..." />
+            <Input
+              placeholder="VD: RAM, CPU, Kích thước màn hình…"
+              autoFocus
+              onPressEnter={() => form.submit()}
+            />
           </Form.Item>
 
           <Form.Item
             label="Đơn vị đo"
             name="MeasurementUnit"
-            tooltip="Không bắt buộc (VD: GB, GHz, inch...)"
+            tooltip="Không bắt buộc (VD: GB, GHz, inch…)"
+            rules={[{ max: 50, message: "Tối đa 50 ký tự" }]}
           >
-            <Input placeholder="VD: GB, Hz, inch..." />
+            <Input placeholder="VD: GB, Hz, inch…" />
           </Form.Item>
 
-          <Form.Item style={{ textAlign: "right" }}>
+          <Form.Item style={{ textAlign: "right", marginBottom: 0 }}>
             <Button onClick={() => setOpenModal(false)}>Hủy</Button>
-            <Button type="primary" htmlType="submit" style={{ marginLeft: 8 }}>
+            <Button
+              type="primary"
+              htmlType="submit"
+              style={{ marginLeft: 8 }}
+              loading={saving}
+            >
               {editing ? "Cập nhật" : "Lưu"}
             </Button>
           </Form.Item>
@@ -283,6 +401,4 @@ const AttributePage = () => {
       </Modal>
     </Card>
   );
-};
-
-export default AttributePage;
+}

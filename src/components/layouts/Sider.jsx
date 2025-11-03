@@ -24,8 +24,9 @@ const siderItems = [
         children: [
           { key: "/item", label: "Mẫu tài sản" },
           { key: "/asset", label: "Tài sản" },
-          { key: "/assetconfig", label: "Cấu hình tài sản" },
           { key: "/assethistory", label: "Lịch sử tài sản" },
+          { key: "/schedulemaintenance", label: "Lên lịch bảo trì" },
+          { key: "/scheduleworkorder", label: "Thực hiện bảo trì" }
         ],
       },
       {

@@ -11,9 +11,7 @@ import AttributePage from "../pages/Attribute";
 import CategoryAttributePage from "../pages/CategoryAttribute";
 import ItemMasterPage from "../pages/ItemMaster";
 import AssetPage from "../pages/Asset";
-import AssetConfigPage from "../pages/AssetConfig";
 import AssetDetailPage from "../pages/AssetDetail";
-
 import RequestPage from "../pages/Request";
 import AssetHistoryPage from "../pages/AssetHistory";
 import ScheduleMaintenancePage from "../pages/ScheduleMaintenance";
@@ -63,14 +61,6 @@ const router = createBrowserRouter([
         element: (
           <PrivateRoute>
             <AssetPage />
-          </PrivateRoute>
-        ),
-      },
-      {
-        path: "assetconfig",
-        element: (
-          <PrivateRoute>
-            <AssetConfigPage />
           </PrivateRoute>
         ),
       },
