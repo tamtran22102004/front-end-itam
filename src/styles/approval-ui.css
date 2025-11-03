@@ -1,0 +1,77 @@
+/* ==== Table cells: thẳng hàng, không wrap lung tung ==== */
+.cell-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.cell-truncate {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cell-sep {
+  opacity: 0.45;
+}
+
+.mono-id {
+  font-variant-numeric: tabular-nums; /* width đều cho số */
+  display: inline-block;
+  min-width: 64px; /* nhất quán chiều rộng ID */
+  text-align: center;
+}
+
+.note-ellipsis {
+  display: inline-block;
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Zebra rows nhẹ để mắt đỡ mỏi */
+.zebra-row td {
+  background: #fafafa;
+}
+
+/* ==== Timeline: label (thời gian) có cột cố định, nội dung đều hàng ==== */
+.tl-scroll {
+  max-height: 300px;
+  overflow: auto;
+  padding-right: 6px;
+}
+
+/* Ant Timeline có class label mode: chỉnh width cột label cho đều */
+.tl.ant-timeline.ant-timeline-label .ant-timeline-item-label {
+  width: 170px; /* ⬅️ cột thời gian cố định */
+  text-align: right;
+  padding-right: 12px;
+  color: rgba(0, 0, 0, 0.45);
+  font-variant-numeric: tabular-nums;
+}
+
+.tl.ant-timeline.ant-timeline-label .ant-timeline-item-tail {
+  inset-inline-start: 190px; /* = label width + padding để căn thẳng trục */
+}
+
+.tl.ant-timeline.ant-timeline-label .ant-timeline-item-head,
+.tl.ant-timeline.ant-timeline-label .ant-timeline-item-content {
+  inset-inline-start: 190px;
+}
+
+.tl-item {
+  line-height: 1.6;
+}
+.tl-title {
+  margin-bottom: 2px;
+}
+.tl-meta {
+  color: rgba(0, 0, 0, 0.55);
+  font-size: 12px;
+}
+.tl-comment {
+  margin-top: 4px;
+}

@@ -12,6 +12,9 @@ import {
   Modal,
   Popconfirm,
   Divider,
+  Tooltip,
+  Tag,
+  Typography,
 } from "antd";
 import {
   PlusOutlined,
@@ -22,8 +25,10 @@ import {
   CloseCircleOutlined,
 } from "@ant-design/icons";
 import axios from "axios";
+// import "../styles/itemmaster-ui.css"; // ⬅️ CSS mới
 
 const { Option } = Select;
+const { Text } = Typography;
 
 const ItemMasterPage = () => {
   const [form] = Form.useForm();
@@ -37,7 +42,7 @@ const ItemMasterPage = () => {
   const [openAssetModal, setOpenAssetModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
 
-  // 🔹 chỉ-thêm: state filter (giữ UI gọn, không ảnh hưởng bảng)
+  // Filters
   const [filters, setFilters] = useState({
     q: "",
     category: undefined,
@@ -89,6 +94,19 @@ const ItemMasterPage = () => {
     fetchManufacturers();
   }, []);
 
+  // ===== Maps hiển thị tên nhanh & ổn định chiều rộng =====
+  const catMap = useMemo(() => {
+    const m = {};
+    categories.forEach((c) => (m[c.ID] = c.Name || c.ID));
+    return m;
+  }, [categories]);
+
+  const manuMap = useMemo(() => {
+    const m = {};
+    manufacturers.forEach((x) => (m[x.ID] = x.Name || x.ID));
+    return m;
+  }, [manufacturers]);
+
   // ===== Category -> Attribute config =====
   const handleCategoryChange = async (categoryID) => {
     if (!categoryID) {
@@ -128,7 +146,7 @@ const ItemMasterPage = () => {
   // ===== Submit add/update ItemMaster =====
   const onFinish = async (values) => {
     try {
-      // ép AvailableQuantity theo Total - InUse để payload gửi luôn đúng
+      // AvailableQuantity = Total - InUse (chốt lại để luôn đúng)
       const total = Number(values.TotalQuantity || 0);
       const inUse = Number(values.InUseQuantity || 0);
       const computedAvailable = Math.max(total - inUse, 0);
@@ -221,7 +239,7 @@ const ItemMasterPage = () => {
     }
   };
 
-  // 🔹 chỉ-thêm: lọc client-side — không đụng columns/layout
+  // ===== Lọc client-side =====
   const filteredItemMasters = useMemo(() => {
     let list = itemMasters;
 
@@ -230,7 +248,7 @@ const ItemMasterPage = () => {
       list = list.filter(
         (it) =>
           (it.Name || "").toLowerCase().includes(q) ||
-          (it.ID || "").toLowerCase().includes(q)
+          (String(it.ID || "")).toLowerCase().includes(q)
       );
     }
     if (filters.category) {
@@ -247,7 +265,6 @@ const ItemMasterPage = () => {
     } else if (filters.stock === "out") {
       list = list.filter((it) => Number(it.AvailableQuantity || 0) <= 0);
     }
-
     return list;
   }, [itemMasters, filters]);
 
@@ -260,44 +277,111 @@ const ItemMasterPage = () => {
       stock: undefined,
     });
 
-  // ===== Columns (GIỮ NGUYÊN của bạn) =====
+  // ===== Helpers UI =====
+  const manageTypeTag = (t) =>
+    t ? (
+      <Tag color={t === "INDIVIDUAL" ? "purple" : "cyan"}>{t}</Tag>
+    ) : (
+      <Tag>—</Tag>
+    );
+
+  const stockTag = (v) =>
+    Number(v || 0) > 0 ? (
+      <Tag color="green">Còn</Tag>
+    ) : (
+      <Tag color="red">Hết</Tag>
+    );
+
+  // ===== Columns (UI chuẩn, cố định kích thước – không xô lệch) =====
   const columns = [
-    { title: "ID", dataIndex: "ID", key: "ID" },
+    {
+      title: "ID",
+      dataIndex: "ID",
+      key: "ID",
+      width: 110,
+      align: "center",
+      render: (v) => <Text code className="mono-id">{v}</Text>,
+    },
     {
       title: "Danh mục",
       dataIndex: "CategoryID",
       key: "CategoryID",
-      render: (id) => categories.find((c) => c.ID === id)?.Name || id || "—",
+      width: 200,
+      render: (id) => (
+        <div className="cell-inline">
+          <Text className="cell-truncate" style={{ maxWidth: 120 }}>
+            {catMap[id] || id || "—"}
+          </Text>
+        </div>
+      ),
     },
     {
       title: "Nhà sản xuất",
       dataIndex: "ManufacturerID",
       key: "ManufacturerID",
-      render: (id) => manufacturers.find((m) => m.ID === id)?.Name || id || "—",
+      width: 200,
+      render: (id) => (
+        <div className="cell-inline">
+          <Text className="cell-truncate" style={{ maxWidth: 120 }}>
+            {manuMap[id] || id || "—"}
+          </Text>
+          <Text type="secondary" className="cell-sep">|</Text>
+          <Text code className="mono-id">{id ?? "-"}</Text>
+        </div>
+      ),
     },
-    { title: "Tên sản phẩm", dataIndex: "Name", key: "Name" },
-    { title: "Loại quản lý", dataIndex: "ManageType", key: "ManageType" },
+    {
+      title: "Tên sản phẩm",
+      dataIndex: "Name",
+      key: "Name",
+      width: 260,
+      ellipsis: { showTitle: false },
+      render: (v) =>
+        v ? (
+          <Tooltip title={v}>
+            <span className="note-ellipsis">{v}</span>
+          </Tooltip>
+        ) : (
+          "—"
+        ),
+    },
+    {
+      title: "Loại quản lý",
+      dataIndex: "ManageType",
+      key: "ManageType",
+      width: 150,
+      align: "center",
+      render: (v) => manageTypeTag(v),
+    },
     {
       title: "Tổng SL",
       dataIndex: "TotalQuantity",
       key: "TotalQuantity",
+      width: 110,
       align: "center",
+      render: (v) => <Tag>{v ?? 0}</Tag>,
     },
     {
       title: "Đang dùng",
       dataIndex: "InUseQuantity",
       key: "InUseQuantity",
+      width: 110,
       align: "center",
+      render: (v) => <Tag color="blue">{v ?? 0}</Tag>,
     },
     {
       title: "Còn lại",
       dataIndex: "AvailableQuantity",
       key: "AvailableQuantity",
+      width: 110,
       align: "center",
+      render: (v) => <span>{stockTag(v)} <Text strong>{v ?? 0}</Text></span>,
     },
     {
       title: "Thao tác",
       key: "action",
+      fixed: "right",
+      width: 290,
       render: (_, record) => (
         <Space>
           <Button
@@ -311,22 +395,24 @@ const ItemMasterPage = () => {
             Tạo chi tiết
           </Button>
 
-          <Button
-            icon={<EditOutlined />}
-            onClick={async () => {
-              try {
-                setEditingItem(record);
-                form.setFieldsValue(record);
-                setOpenModal(true);
-                await handleCategoryChange(record.CategoryID);
-                const attrFormValues = await loadItemAttributes(record.ID);
-                form.setFieldsValue(attrFormValues);
-              } catch (err) {
-                console.error("❌ Lỗi khi mở Edit:", err);
-                message.error("Không thể tải dữ liệu chi tiết thiết bị");
-              }
-            }}
-          />
+          <Tooltip title="Chỉnh sửa">
+            <Button
+              icon={<EditOutlined />}
+              onClick={async () => {
+                try {
+                  setEditingItem(record);
+                  form.setFieldsValue(record);
+                  setOpenModal(true);
+                  await handleCategoryChange(record.CategoryID);
+                  const attrFormValues = await loadItemAttributes(record.ID);
+                  form.setFieldsValue(attrFormValues);
+                } catch (err) {
+                  console.error("❌ Lỗi khi mở Edit:", err);
+                  message.error("Không thể tải dữ liệu chi tiết thiết bị");
+                }
+              }}
+            />
+          </Tooltip>
 
           <Popconfirm
             title="Bạn có chắc muốn xóa?"
@@ -341,7 +427,14 @@ const ItemMasterPage = () => {
 
   return (
     <Card
-      title="Quản lý Dòng thiết bị (ItemMaster)"
+      title={
+        <Space align="baseline">
+          Quản lý Dòng thiết bị (ItemMaster)
+          <Tag color="geekblue">
+            {filteredItemMasters.length}/{itemMasters.length}
+          </Tag>
+        </Space>
+      }
       extra={
         <Space>
           <Button icon={<ReloadOutlined />} onClick={fetchItemMasters}>
@@ -361,9 +454,10 @@ const ItemMasterPage = () => {
           </Button>
         </Space>
       }
+      bodyStyle={{ paddingTop: 12 }}
     >
-      {/* 🔹 chỉ-thêm: Filter bar nhỏ gọn, không đụng bảng */}
-      <div style={{ marginBottom: 12 }}>
+      {/* Filter bar */}
+      <div className="bar">
         <Space wrap>
           <Input
             allowClear
@@ -373,7 +467,7 @@ const ItemMasterPage = () => {
             onChange={(e) =>
               setFilters((f) => ({ ...f, q: e.target.value }))
             }
-            style={{ width: 240 }}
+            style={{ width: 260 }}
           />
 
           <Select
@@ -381,35 +475,35 @@ const ItemMasterPage = () => {
             placeholder="Danh mục"
             value={filters.category}
             onChange={(v) => setFilters((f) => ({ ...f, category: v }))}
-            style={{ width: 200 }}
-          >
-            {categories.map((c) => (
-              <Option key={c.ID} value={c.ID}>
-                {c.Name}
-              </Option>
-            ))}
-          </Select>
+            style={{ width: 220 }}
+            showSearch
+            optionFilterProp="label"
+            options={categories.map((c) => ({
+              value: c.ID,
+              label: c.Name,
+            }))}
+          />
 
           <Select
             allowClear
             placeholder="Nhà sản xuất"
             value={filters.manufacturer}
             onChange={(v) => setFilters((f) => ({ ...f, manufacturer: v }))}
-            style={{ width: 200 }}
-          >
-            {manufacturers.map((m) => (
-              <Option key={m.ID} value={m.ID}>
-                {m.Name}
-              </Option>
-            ))}
-          </Select>
+            style={{ width: 220 }}
+            showSearch
+            optionFilterProp="label"
+            options={manufacturers.map((m) => ({
+              value: m.ID,
+              label: m.Name,
+            }))}
+          />
 
           <Select
             allowClear
             placeholder="Loại quản lý"
             value={filters.manageType}
             onChange={(v) => setFilters((f) => ({ ...f, manageType: v }))}
-            style={{ width: 160 }}
+            style={{ width: 180 }}
           >
             <Option value="INDIVIDUAL">INDIVIDUAL</Option>
             <Option value="QUANTITY">QUANTITY</Option>
@@ -420,34 +514,33 @@ const ItemMasterPage = () => {
             placeholder="Tồn kho"
             value={filters.stock}
             onChange={(v) => setFilters((f) => ({ ...f, stock: v }))}
-            style={{ width: 140 }}
+            style={{ width: 160 }}
           >
             <Option value="in">Còn hàng</Option>
             <Option value="out">Hết hàng</Option>
           </Select>
 
-          <Button
-            icon={<CloseCircleOutlined />}
-            onClick={resetFilters}
-          >
+          <Button icon={<CloseCircleOutlined />} onClick={resetFilters}>
             Xóa lọc
           </Button>
-
-          <span style={{ opacity: 0.7 }}>
-            Hiển thị {filteredItemMasters.length}/{itemMasters.length}
-          </span>
         </Space>
       </div>
 
       <Table
-        columns={columns}                 // GIỮ NGUYÊN
-        dataSource={filteredItemMasters}  // chỉ thay nguồn dữ liệu đã lọc
+        columns={columns}
+        dataSource={filteredItemMasters}
         rowKey={(r) => r.ID}
         loading={loading}
-        pagination={{ pageSize: 7 }}
+        size="middle"
+        tableLayout="fixed"               // ⬅️ chống xê dịch
+        sticky
+        bordered
+        rowClassName={(_, i) => (i % 2 ? "zebra-row" : "")}
+        scroll={{ x: 1400, y: 480 }}
+        pagination={{ pageSize: 10, showSizeChanger: false }}
       />
 
-      {/* Modal thêm / sửa ItemMaster — GIỮ NGUYÊN */}
+      {/* Modal thêm / sửa ItemMaster */}
       <Modal
         title={editingItem ? "Cập nhật ItemMaster" : "Thêm ItemMaster mới"}
         open={openModal}
@@ -457,7 +550,7 @@ const ItemMasterPage = () => {
         }}
         footer={null}
         destroyOnClose
-        width={700}
+        width={820}
       >
         <Form
           form={form}
@@ -481,87 +574,98 @@ const ItemMasterPage = () => {
             }
           }}
         >
-          <Form.Item
-            label="Mã Item (ID)"
-            name="ID"
-            rules={[{ required: true, message: "Vui lòng nhập ID" }]}
-          >
-            <Input disabled={!!editingItem} placeholder="Ví dụ: L001" />
-          </Form.Item>
+          <div className="form-grid">
+            <Form.Item
+              label="Mã Item (ID)"
+              name="ID"
+              rules={[{ required: true, message: "Vui lòng nhập ID" }]}
+            >
+              <Input disabled={!!editingItem} placeholder="VD: L001" />
+            </Form.Item>
 
-          <Form.Item
-            label="Danh mục"
-            name="CategoryID"
-            rules={[{ required: true, message: "Vui lòng chọn danh mục" }]}
-          >
-            <Select placeholder="Chọn danh mục" onChange={handleCategoryChange}>
-              {categories.map((cat) => (
-                <Option key={cat.ID} value={cat.ID}>
-                  {cat.Name}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
+            <Form.Item
+              label="Danh mục"
+              name="CategoryID"
+              rules={[{ required: true, message: "Vui lòng chọn danh mục" }]}
+            >
+              <Select placeholder="Chọn danh mục" onChange={handleCategoryChange} showSearch optionFilterProp="label">
+                {categories.map((cat) => (
+                  <Option key={cat.ID} value={cat.ID} label={cat.Name}>
+                    {cat.Name}
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
 
-          <Form.Item
-            label="Nhà sản xuất"
-            name="ManufacturerID"
-            rules={[{ required: false }]}
-          >
-            <Select placeholder="Chọn nhà sản xuất (có thể bỏ trống)">
-              {manufacturers.map((m) => (
-                <Option key={m.ID} value={m.ID}>
-                  {m.Name}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
+            <Form.Item label="Nhà sản xuất" name="ManufacturerID">
+              <Select placeholder="Chọn nhà sản xuất (có thể bỏ trống)" showSearch optionFilterProp="label">
+                {manufacturers.map((m) => (
+                  <Option key={m.ID} value={m.ID} label={m.Name}>
+                    {m.Name}
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
 
-          <Form.Item
-            label="Tên sản phẩm"
-            name="Name"
-            rules={[{ required: true, message: "Vui lòng nhập tên sản phẩm" }]}
-          >
-            <Input />
-          </Form.Item>
+            <Form.Item
+              label="Tên sản phẩm"
+              name="Name"
+              rules={[{ required: true, message: "Vui lòng nhập tên sản phẩm" }]}
+            >
+              <Input />
+            </Form.Item>
 
-          <Form.Item
-            label="Loại quản lý"
-            name="ManageType"
-            rules={[{ required: true, message: "Vui lòng chọn loại quản lý" }]}
-          >
-            <Select placeholder="Chọn loại quản lý">
-              <Option value="INDIVIDUAL">INDIVIDUAL (theo serial)</Option>
-              <Option value="QUANTITY">QUANTITY (theo số lượng)</Option>
-            </Select>
-          </Form.Item>
+            <Form.Item
+              label="Loại quản lý"
+              name="ManageType"
+              rules={[{ required: true, message: "Vui lòng chọn loại quản lý" }]}
+            >
+              <Select placeholder="Chọn loại quản lý">
+                <Option value="INDIVIDUAL">INDIVIDUAL (theo serial)</Option>
+                <Option value="QUANTITY">QUANTITY (theo số lượng)</Option>
+              </Select>
+            </Form.Item>
+
+            <Form.Item label="Tổng SL" name="TotalQuantity">
+              <InputNumber min={0} style={{ width: "100%" }} />
+            </Form.Item>
+
+            <Form.Item label="Đang dùng" name="InUseQuantity">
+              <InputNumber min={0} style={{ width: "100%" }} />
+            </Form.Item>
+
+            <Form.Item label="Còn lại (tự tính)" name="AvailableQuantity">
+              <InputNumber min={0} style={{ width: "100%" }} disabled />
+            </Form.Item>
+          </div>
 
           {/* Thuộc tính động (IsRequired) */}
           {attributes.length > 0 && (
             <>
               <Divider>Thuộc tính kỹ thuật (bắt buộc)</Divider>
-              {attributes
-                .filter((attr) => attr.IsRequired === 1 || attr.IsRequired === true)
-                .map((attr) => {
-                  const name = attr.AttributeName;
-                  const unit = attr.MeasurementUnit || "";
-                  const attrId = attr.AttributeID || attr.ID;
-
-                  return (
-                    <Form.Item
-                      key={attrId}
-                      label={`${name}${unit ? ` (${unit})` : ""}`}
-                      name={`attr_${attrId}`}
-                      rules={[{ required: true, message: `Vui lòng nhập ${name}` }]}
-                    >
-                      <Input placeholder={`Nhập ${name}`} />
-                    </Form.Item>
-                  );
-                })}
+              <div className="form-grid">
+                {attributes
+                  .filter((attr) => attr.IsRequired === 1 || attr.IsRequired === true)
+                  .map((attr) => {
+                    const name = attr.AttributeName;
+                    const unit = attr.MeasurementUnit || "";
+                    const attrId = attr.AttributeID || attr.ID;
+                    return (
+                      <Form.Item
+                        key={attrId}
+                        label={`${name}${unit ? ` (${unit})` : ""}`}
+                        name={`attr_${attrId}`}
+                        rules={[{ required: true, message: `Vui lòng nhập ${name}` }]}
+                      >
+                        <Input placeholder={`Nhập ${name}`} />
+                      </Form.Item>
+                    );
+                  })}
+              </div>
             </>
           )}
 
-          <Form.Item style={{ textAlign: "right" }}>
+          <Form.Item style={{ textAlign: "right", marginTop: 8 }}>
             <Button onClick={() => setOpenModal(false)}>Hủy</Button>
             <Button type="primary" htmlType="submit" style={{ marginLeft: 8 }}>
               {editingItem ? "Cập nhật" : "Lưu"}
@@ -570,7 +674,7 @@ const ItemMasterPage = () => {
         </Form>
       </Modal>
 
-      {/* Modal tạo Asset — GIỮ NGUYÊN */}
+      {/* Modal tạo Asset */}
       <Modal
         title={`Tạo sản phẩm chi tiết cho: ${selectedItem?.Name || ""}`}
         open={openAssetModal}
@@ -582,6 +686,7 @@ const ItemMasterPage = () => {
         destroyOnClose
       >
         <Form
+          key={selectedItem?.ID || "asset-new"}  // ⬅️ remount theo sản phẩm
           layout="vertical"
           onFinish={handleAddAsset}
           initialValues={{
@@ -589,63 +694,65 @@ const ItemMasterPage = () => {
             Status: 1,
           }}
         >
-          <Form.Item
-            label="Mã quản lý nội bộ (ManageCode)"
-            name="ManageCode"
-            rules={[{ required: true, message: "Vui lòng nhập mã quản lý nội bộ" }]}
-          >
-            <Input placeholder="VD: IT123" />
-          </Form.Item>
-
-          <Form.Item label="Mã tài sản kế toán (AssetCode)" name="AssetCode">
-            <Input placeholder="VD: B123" />
-          </Form.Item>
-
-          <Form.Item label="Tên hiển thị thiết bị" name="Name">
-            <Input placeholder="VD: Laptop Dell i5" />
-          </Form.Item>
-
-          <Form.Item label="Ngày mua" name="PurchaseDate">
-            <Input type="date" />
-          </Form.Item>
-
-          <Form.Item label="Giá mua" name="PurchasePrice">
-            <InputNumber min={0} style={{ width: "100%" }} />
-          </Form.Item>
-
-          {selectedItem?.ManageType === "INDIVIDUAL" ? (
-            <>
-              <Form.Item
-                label="Số serial"
-                name="SerialNumber"
-                rules={[{ required: true, message: "Vui lòng nhập số serial" }]}
-              >
-                <Input placeholder="VD: SN12345" />
-              </Form.Item>
-              <Form.Item name="Quantity" hidden initialValue={1}>
-                <InputNumber />
-              </Form.Item>
-            </>
-          ) : (
+          <div className="form-grid">
             <Form.Item
-              label="Số lượng"
-              name="Quantity"
-              rules={[{ required: true, message: "Vui lòng nhập số lượng" }]}
+              label="Mã quản lý nội bộ (ManageCode)"
+              name="ManageCode"
+              rules={[{ required: true, message: "Vui lòng nhập mã quản lý nội bộ" }]}
             >
-              <InputNumber min={1} style={{ width: "100%" }} />
+              <Input placeholder="VD: IT123" />
             </Form.Item>
-          )}
 
-          <Form.Item label="Trạng thái" name="Status">
-            <Select>
-              <Option value={1}>Sẵn sàng</Option>
-              <Option value={2}>Đang dùng</Option>
-              <Option value={3}>Bảo hành</Option>
-              <Option value={4}>Sửa chữa</Option>
-              <Option value={5}>Hủy</Option>
-              <Option value={6}>Thanh lý</Option>
-            </Select>
-          </Form.Item>
+            <Form.Item label="Mã tài sản kế toán (AssetCode)" name="AssetCode">
+              <Input placeholder="VD: B123" />
+            </Form.Item>
+
+            <Form.Item label="Tên hiển thị thiết bị" name="Name">
+              <Input placeholder="VD: Laptop Dell i5" />
+            </Form.Item>
+
+            <Form.Item label="Ngày mua" name="PurchaseDate">
+              <Input type="date" />
+            </Form.Item>
+
+            <Form.Item label="Giá mua" name="PurchasePrice">
+              <InputNumber min={0} style={{ width: "100%" }} />
+            </Form.Item>
+
+            {selectedItem?.ManageType === "INDIVIDUAL" ? (
+              <>
+                <Form.Item
+                  label="Số serial"
+                  name="SerialNumber"
+                  rules={[{ required: true, message: "Vui lòng nhập số serial" }]}
+                >
+                  <Input placeholder="VD: SN12345" />
+                </Form.Item>
+                <Form.Item name="Quantity" hidden initialValue={1}>
+                  <InputNumber />
+                </Form.Item>
+              </>
+            ) : (
+              <Form.Item
+                label="Số lượng"
+                name="Quantity"
+                rules={[{ required: true, message: "Vui lòng nhập số lượng" }]}
+              >
+                <InputNumber min={1} style={{ width: "100%" }} />
+              </Form.Item>
+            )}
+
+            <Form.Item label="Trạng thái" name="Status">
+              <Select>
+                <Option value={1}>Sẵn sàng</Option>
+                <Option value={2}>Đang dùng</Option>
+                <Option value={3}>Bảo hành</Option>
+                <Option value={4}>Sửa chữa</Option>
+                <Option value={5}>Hủy</Option>
+                <Option value={6}>Thanh lý</Option>
+              </Select>
+            </Form.Item>
+          </div>
 
           <Form.Item style={{ textAlign: "right" }}>
             <Button onClick={() => setOpenAssetModal(false)}>Hủy</Button>

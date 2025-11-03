@@ -45,21 +45,8 @@ const siderItems = [
     icon: <DatabaseOutlined />,
     label: "Yêu cầu & Duyệt",
     children: [
-      {
-        key: "request",
-        label: "Yêu cầu",
-        children: [{ key: "/request", label: "Mẫu yêu cầu" }],
-      },
-      {
-        key: "Approval",
-        label: "Duyệt yêu cầu",
-        children: [
-          { key: "/requestallocation", label: " Cấp phát" },
-          { key: "/requestmaintenance", label: " Bảo trì" },
-          { key: "/requestwarranty", label: " Bảo hành" },
-          { key: "/requestdisposal", label: " Thanh lý" },
-        ],
-      },
+      { key: "/request", label: "Yêu cầu" },
+      { key: "/requestapproval", label: "Duyệt yêu cầu" },
     ],
   },
   {

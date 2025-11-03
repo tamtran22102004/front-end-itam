@@ -4,7 +4,6 @@ import { createBrowserRouter } from "react-router-dom";
 import App from "../App";
 import PrivateRoute from "../components/PrivateRoute";
 import AppLayout from "../components/layouts/AppLayout";
-import MaintenanceApprovalPage from "../pages/MaintenanceApproval";
 import LoginPage from "../pages/Login";
 import RegisterPage from "../pages/Register";
 import CategoryPage from "../pages/Category";
@@ -14,13 +13,12 @@ import ItemMasterPage from "../pages/ItemMaster";
 import AssetPage from "../pages/Asset";
 import AssetConfigPage from "../pages/AssetConfig";
 import AssetDetailPage from "../pages/AssetDetail";
-import AllocationApprovalPage from "../pages/AllocationApproval";
-import WarrantyApprovalPage from "../pages/WarrantyApproval";
+
 import RequestPage from "../pages/Request";
 import AssetHistoryPage from "../pages/AssetHistory";
 import ScheduleMaintenancePage from "../pages/ScheduleMaintenance";
 import ScheduleWorkOrderPage from "../pages/ScheduleWorkOrder";
-import DisposalApprovalPage from "../pages/DisposalApproval";
+import RequestApprovalPage from "../pages/RequestApproval";
 const router = createBrowserRouter([
   {
     path: "/",
@@ -85,14 +83,6 @@ const router = createBrowserRouter([
         ),
       },
       {
-        path: "requestallocation",
-        element: (
-          <PrivateRoute>
-            <AllocationApprovalPage />
-          </PrivateRoute>
-        ),
-      },
-      {
         path: "request",
         element: (
           <PrivateRoute>
@@ -108,14 +98,7 @@ const router = createBrowserRouter([
           </PrivateRoute>
         ),
       },
-      {
-        path: "requestmaintenance",
-        element: (
-          <PrivateRoute>
-            <MaintenanceApprovalPage />
-          </PrivateRoute>
-        ),
-      },
+
       {
         path: "schedulemaintenance",
         element: (
@@ -132,19 +115,12 @@ const router = createBrowserRouter([
           </PrivateRoute>
         ),
       },
+
       {
-        path: "requestwarranty",
+        path: "requestapproval",
         element: (
           <PrivateRoute>
-            <WarrantyApprovalPage />
-          </PrivateRoute>
-        ),
-      },
-      {
-        path: "requestdisposal",
-        element: (
-          <PrivateRoute>
-            <DisposalApprovalPage />
+            <RequestApprovalPage />
           </PrivateRoute>
         ),
       },
