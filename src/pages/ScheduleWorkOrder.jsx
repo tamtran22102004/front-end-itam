@@ -12,8 +12,8 @@ import axios from "axios";
 
 const API_URL = import.meta.env.VITE_BACKEND_URL;
 const ASSETS_API = `${API_URL}/api/asset`;
-const ME_API = `${API_URL}/api/getuserinfo`;      // có thể là list hoặc 1 object, xử lý linh hoạt
-const USERS_API = `${API_URL}/api/users`;          // nếu không tồn tại, sẽ fallback sang ME_API
+const USERS_API = `${API_URL}/api/getuserinfo`;      // <-- dùng endpoint bạn có
+const DEPT_API = `${API_URL}/api/getdepartment`;        // <-- dùng endpoint bạn có
 
 const STATUS_COLORS = { OPEN: "default", IN_PROGRESS: "processing", DONE: "success", CANCELLED: "error" };
 
@@ -35,22 +35,39 @@ const getSavedUser = () => {
   } catch {}
   return null;
 };
+
 const normalizeUserRecord = (u) => ({
-  id: u?.UserID ?? u?.userId ?? u?.id ?? null,
+  id: Number(u?.UserID ?? u?.userId ?? u?.id ?? 0) || null,
   fullname: u?.FullName ?? u?.fullName ?? u?.fullname ?? u?.name ?? "",
+  departmentId: u?.DepartmentID ?? u?.departmentId ?? null,
+  raw: u,
 });
-const pickUserMe = (res) => {
-  // nếu API trả object đơn
-  const d = res?.data || {};
-  if (d && (d.UserID || d.id || d.userId)) return normalizeUserRecord(d);
-  // nếu trả list, lấy phần tử đầu (hoặc null)
-  const arr = pickArray(res);
-  if (arr.length) return normalizeUserRecord(arr[0]);
-  return { id: null, fullname: "Me" };
-};
 const pickUsersList = (res) => {
   const arr = pickArray(res);
-  return (arr || []).map((u) => ({ value: Number(u.UserID ?? u.id), label: u.FullName ?? u.name ?? `User ${u.UserID}`, raw: u }));
+  return (arr || []).map((u) => {
+    const nu = normalizeUserRecord(u);
+    return {
+      value: nu.id,
+      label: nu.fullname || `User ${nu.id}`,
+      departmentId: nu.departmentId ?? null,
+      raw: u,
+    };
+  });
+};
+const pickUserMe = (res) => {
+  const d = res?.data || {};
+  if (d && (d.UserID || d.id || d.userId)) return normalizeUserRecord(d);
+  const arr = pickArray(res);
+  if (arr.length) return normalizeUserRecord(arr[0]);
+  return { id: null, fullname: "Me", departmentId: null };
+};
+const pickDepartments = (res) => {
+  const arr = pickArray(res);
+  return (arr || []).map((d) => ({
+    value: Number(d.DepartmentID ?? d.id ?? d.departmentId),
+    label: d.DepartmentName ?? d.name ?? `Dept ${d.DepartmentID}`,
+    raw: d,
+  }));
 };
 const buildAssetLabel = (a) => {
   const name = a.Name || a.AssetName || "";
@@ -72,14 +89,14 @@ const CreateWOForm = ({ onSubmit, assetOptions, usersOptions, me }) => {
     const payload = {
       ...values,
       DueDate: fmtDate(values.DueDate),
-      // ❗ Format DATETIME chuẩn cho MySQL, không dùng ISO
       PlannedStart: fmtDateTime(values.PlannedStart),
       PlannedEnd: fmtDateTime(values.PlannedEnd),
     };
     onSubmit(payload);
   };
 
-  const setAssigneeToMe = () => me?.id && form.setFieldValue("AssignedToUserID", Number(me.id));
+  const setAssigneeToMe = () =>
+    me?.id && form.setFieldValue("AssignedToUserID", Number(me.id));
 
   return (
     <Form form={form} layout="vertical" onFinish={handleFinish}>
@@ -116,11 +133,53 @@ const CreateWOForm = ({ onSubmit, assetOptions, usersOptions, me }) => {
   );
 };
 
-const StartWOForm = ({ onSubmit }) => {
+const StartWOForm = ({ onSubmit, usersOptions, deptOptions, userDeptMap, me }) => {
   const [form] = Form.useForm();
-  const handleFinish = (v) => onSubmit({ PlannedStart: fmtDateTime(v?.PlannedStart) });
+
+  useEffect(() => {
+    form.resetFields();
+  }, []);
+
+  const handleUserChange = (uid) => {
+    const deptId = userDeptMap[Number(uid)];
+    if (deptId) form.setFieldValue("ReceiverDepartmentID", Number(deptId));
+  };
+
+  const setReceiverToMe = () => {
+    if (!me?.id) return;
+    form.setFieldsValue({
+      ReceiverUserID: Number(me.id),
+      ReceiverDepartmentID: userDeptMap[Number(me.id)] ?? null,
+    });
+  };
+
+  const handleFinish = (v) =>
+    onSubmit({
+      PlannedStart: fmtDateTime(v?.PlannedStart),
+      ReceiverUserID: v?.ReceiverUserID,
+      ReceiverDepartmentID: v?.ReceiverDepartmentID ?? null,
+    });
+
   return (
     <Form form={form} layout="vertical" onFinish={handleFinish}>
+      <Form.Item label="ReceiverUserID" name="ReceiverUserID" rules={[{ required: true, message: "Chọn người nhận bảo trì" }]}>
+        <Select
+          showSearch allowClear placeholder="Chọn người nhận"
+          options={usersOptions} optionFilterProp="label"
+          onChange={handleUserChange}
+        />
+      </Form.Item>
+      <Form.Item label="ReceiverDepartmentID" name="ReceiverDepartmentID">
+        <Select
+          showSearch allowClear placeholder="Chọn phòng ban nhận"
+          options={deptOptions} optionFilterProp="label"
+        />
+      </Form.Item>
+      {me?.id && (
+        <Button size="small" style={{ marginTop: -8, marginBottom: 8 }} icon={<UserSwitchOutlined />} onClick={setReceiverToMe}>
+          Gán người nhận = Tôi ({me.fullname})
+        </Button>
+      )}
       <Form.Item label="PlannedStart (optional)" name="PlannedStart">
         <DatePicker showTime style={{ width: "100%" }} />
       </Form.Item>
@@ -129,16 +188,56 @@ const StartWOForm = ({ onSubmit }) => {
   );
 };
 
-const CompleteWOForm = ({ onSubmit }) => {
+const CompleteWOForm = ({ onSubmit, usersOptions, deptOptions, userDeptMap, me }) => {
   const [form] = Form.useForm();
-  const handleFinish = (v) => onSubmit({
-    CompletedAt: fmtDateTime(v?.CompletedAt),
-    ResultNotes: v?.ResultNotes || null,
-    Cost: v?.Cost ?? null,
-    UpdateScheduleNext: v?.UpdateScheduleNext ?? true,
-  });
+
+  useEffect(() => {
+    form.resetFields();
+  }, []);
+
+  const handleUserChange = (uid) => {
+    const deptId = userDeptMap[Number(uid)];
+    if (deptId) form.setFieldValue("ReturnDepartmentID", Number(deptId));
+  };
+
+  const setReturnToMe = () => {
+    if (!me?.id) return;
+    form.setFieldsValue({
+      ReturnUserID: Number(me.id),
+      ReturnDepartmentID: userDeptMap[Number(me.id)] ?? null,
+    });
+  };
+
+  const handleFinish = (v) =>
+    onSubmit({
+      CompletedAt: fmtDateTime(v?.CompletedAt),
+      ResultNotes: v?.ResultNotes || null,
+      Cost: v?.Cost ?? null,
+      UpdateScheduleNext: v?.UpdateScheduleNext ?? true,
+      ReturnUserID: v?.ReturnUserID,
+      ReturnDepartmentID: v?.ReturnDepartmentID ?? null,
+    });
+
   return (
     <Form form={form} layout="vertical" onFinish={handleFinish} initialValues={{ UpdateScheduleNext: true }}>
+      <Form.Item label="ReturnUserID" name="ReturnUserID" rules={[{ required: true, message: "Chọn người nhận về" }]}>
+        <Select
+          showSearch allowClear placeholder="Chọn người nhận về"
+          options={usersOptions} optionFilterProp="label"
+          onChange={handleUserChange}
+        />
+      </Form.Item>
+      <Form.Item label="ReturnDepartmentID" name="ReturnDepartmentID">
+        <Select
+          showSearch allowClear placeholder="Chọn phòng ban nhận về"
+          options={deptOptions} optionFilterProp="label"
+        />
+      </Form.Item>
+      {me?.id && (
+        <Button size="small" style={{ marginTop: -8, marginBottom: 8 }} icon={<UserSwitchOutlined />} onClick={setReturnToMe}>
+          Gán nhận về = Tôi ({me.fullname})
+        </Button>
+      )}
       <Form.Item label="CompletedAt" name="CompletedAt" rules={[{ required: true, message: "Chọn thời điểm hoàn tất" }]}>
         <DatePicker showTime style={{ width: "100%" }} />
       </Form.Item>
@@ -164,7 +263,9 @@ const WorkOrderPage = () => {
   // dynamic
   const [assetOptions, setAssetOptions] = useState([]);
   const [usersOptions, setUsersOptions] = useState([]);
-  const [userMap, setUserMap] = useState({});
+  const [deptOptions, setDeptOptions] = useState([]);
+  const [userDeptMap, setUserDeptMap] = useState({}); // UserID -> DepartmentID
+  const [userMap, setUserMap] = useState({}); // UserID -> FullName
   const [me, setMe] = useState(null);
 
   // filters
@@ -194,34 +295,42 @@ const WorkOrderPage = () => {
       message.warning("Không load được danh sách assets");
     }
 
-    // ----- users + me (linh hoạt endpoint) -----
+    // Departments
     try {
-      let users = [];
-      // ưu tiên USERS_API nếu tồn tại
-      try {
-        const usersRes = await axios.get(USERS_API);
-        users = pickUsersList(usersRes);
-      } catch {
-        // fallback: ME_API có thể trả list users
-        const listRes = await axios.get(ME_API);
-        users = pickUsersList(listRes);
-      }
+      const deptRes = await axios.get(DEPT_API);
+      const depts = pickDepartments(deptRes);
+      setDeptOptions(depts);
+
+    } catch {
+      message.warning("Không load được danh sách phòng ban");
+    }
+
+    // Users + me
+    try {
+      const usersRes = await axios.get(USERS_API);
+      const users = pickUsersList(usersRes);
       setUsersOptions(users);
 
       const map = {};
-      users.forEach((u) => { map[u.value] = u.label; });
+      const deptMap = {};
+      users.forEach((u) => {
+        map[Number(u.value)] = u.label;
+        if (u?.departmentId != null) deptMap[Number(u.value)] = Number(u.departmentId);
+      });
 
-      // me: ưu tiên localStorage, sau đó lấy từ ME_API
       let _me = normalizeUserRecord(getSavedUser());
       if (!_me?.id) {
         try {
-          const meRes = await axios.get(ME_API);
+          const meRes = await axios.get(USERS_API);
           _me = pickUserMe(meRes);
         } catch {}
       }
       setMe(_me);
       if (_me?.id && !map[_me.id]) map[_me.id] = _me.fullname;
+      if (_me?.id && _me.departmentId && !deptMap[_me.id]) deptMap[_me.id] = Number(_me.departmentId);
+
       setUserMap(map);
+      setUserDeptMap(deptMap);
     } catch (e) {
       message.warning("Không load được users hoặc user info");
     }
@@ -309,10 +418,10 @@ const WorkOrderPage = () => {
     { title: "CreatedBy", dataIndex: "CreatedByUserID", width: 220, render: renderUser },
     { title: "Cost", dataIndex: "Cost", width: 110, render: v => (v != null ? Number(v).toLocaleString() : "-") },
     {
-      title: "Actions", key: "actions", fixed: "right", width: 320,
+      title: "Actions", key: "actions", fixed: "right", width: 360,
       render: (_, r) => (
         <Space wrap onClick={(e)=>e.stopPropagation()}>
-          <Tooltip title="Start (ghi MAINTENANCE_OUT)">
+          <Tooltip title="Start (ghi MAINTENANCE_OUT - cần Receiver)">
             <Button
               size="small"
               type="default"
@@ -323,7 +432,7 @@ const WorkOrderPage = () => {
               Start
             </Button>
           </Tooltip>
-          <Tooltip title="Complete (ghi MAINTENANCE_IN + cập nhật Schedule)">
+          <Tooltip title="Complete (ghi MAINTENANCE_IN + cập nhật Schedule - cần Return)">
             <Button
               size="small"
               type="primary"
@@ -392,7 +501,7 @@ const WorkOrderPage = () => {
         dataSource={rows}
         columns={columns}
         pagination={{ pageSize: 10, showSizeChanger: true }}
-        scroll={{ x: 1320 }}
+        scroll={{ x: 1400 }}
       />
 
       <Modal
@@ -417,7 +526,13 @@ const WorkOrderPage = () => {
         footer={null}
         destroyOnClose
       >
-        <StartWOForm onSubmit={(payload) => handleStart(startWOId, payload)} />
+        <StartWOForm
+          onSubmit={(payload) => handleStart(startWOId, payload)}
+          usersOptions={usersOptions}
+          deptOptions={deptOptions}
+          userDeptMap={userDeptMap}
+          me={me}
+        />
       </Modal>
 
       <Modal
@@ -427,7 +542,13 @@ const WorkOrderPage = () => {
         footer={null}
         destroyOnClose
       >
-        <CompleteWOForm onSubmit={(payload) => handleComplete(completeWOId, payload)} />
+        <CompleteWOForm
+          onSubmit={(payload) => handleComplete(completeWOId, payload)}
+          usersOptions={usersOptions}
+          deptOptions={deptOptions}
+          userDeptMap={userDeptMap}
+          me={me}
+        />
       </Modal>
     </Card>
   );

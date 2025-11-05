@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Card,
+  Tooltip,
   Descriptions,
   Table,
   Tag,
@@ -31,16 +32,16 @@ import {
   ReloadOutlined,
   ArrowLeftOutlined,
   SearchOutlined,
+  CopyOutlined,
 } from "@ant-design/icons";
 import axios from "axios";
 import dayjs from "dayjs";
 import { useParams, useNavigate } from "react-router-dom";
-// thêm các import dưới cùng nhóm import hiện có
 import QrPreviewModal from "../components/assets/QrPreviewModal";
 import { QrcodeOutlined, DownloadOutlined } from "@ant-design/icons";
 
 const { Option } = Select;
-const { Title } = Typography;
+const { Text, Paragraph } = Typography;
 
 // --- JS thuần, KHÔNG TypeScript annotation ---
 const STATUS_MAP = {
@@ -98,32 +99,38 @@ const AssetDetailPage = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editForm] = Form.useForm();
 
-  // ManageType hiện tại để khóa Quantity nếu INDIVIDUAL
+  // ManageType hiện tại để khóa/ẩn trường phù hợp khi EDIT
   const [currentManageType, setCurrentManageType] = useState(null);
+
   const [employees, setEmployees] = useState([]); // mảng { value, label }
   const [departments, setDepartments] = useState([]);
+
   // State cho modal xem QR (giống AssetPage)
   const [qrState, setQrState] = useState({
     open: false,
     assetId: null,
     token: null,
-    pngBase64: null, // ⬅️ thêm
+    pngBase64: null,
     title: "",
   });
 
+  // ==== Derived: ManageType theo asset hiện thời ====
+  const manageType = useMemo(() => {
+    if (!asset || !itemMasters?.length) return null;
+    const im = itemMasters.find((i) => String(i.ID) === String(asset.ItemMasterID));
+    return im?.ManageType || null;
+  }, [asset, itemMasters]);
+  const isIndividual = manageType === "INDIVIDUAL";
+
   // Gọi API mint-qr rồi mở modal preview
   const showQr = async (force = false) => {
-    if (!id) return; // id lấy từ useParams()
+    if (!id) return;
     try {
       const url = `${API_URL}/api/qr/${id}/mint-qr${force ? "?force=1" : ""}`;
       const resp = await axios.post(
         url,
         {},
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-          },
-        }
+        { headers: { Authorization: `Bearer ${localStorage.getItem("token") || ""}` } }
       );
 
       const { token, pngBase64 } = resp?.data?.data || {};
@@ -131,9 +138,9 @@ const AssetDetailPage = () => {
 
       setQrState({
         open: true,
-        assetId: id, // ⬅️ để tạo link tải PNG
+        assetId: id,
         token,
-        pngBase64: pngBase64 || null, // ⬅️ xem ngay không cần GET nữa
+        pngBase64: pngBase64 || null,
         title: asset?.Name || asset?.ManageCode || `Asset#${id}`,
       });
     } catch (e) {
@@ -238,9 +245,7 @@ const AssetDetailPage = () => {
   // Mở modal Edit: đổ form + suy ra ManageType
   const openEditModal = () => {
     if (!asset) return;
-    const im = itemMasters.find(
-      (i) => String(i.ID) === String(asset.ItemMasterID)
-    );
+    const im = itemMasters.find((i) => String(i.ID) === String(asset.ItemMasterID));
     const mt = im?.ManageType || null;
     setCurrentManageType(mt);
 
@@ -272,11 +277,15 @@ const AssetDetailPage = () => {
     const im = itemMasters.find((i) => String(i.ID) === String(val));
     const mt = im?.ManageType || null;
     setCurrentManageType(mt);
+
     if (im?.CategoryID) {
       editForm.setFieldsValue({ CategoryID: im.CategoryID });
     }
     if (mt === "INDIVIDUAL") {
       editForm.setFieldsValue({ Quantity: 1 });
+    } else {
+      // QUANTITY: clear user/department khi chuyển từ INDIVIDUAL sang
+      editForm.setFieldsValue({ EmployeeID: null, SectionID: null });
     }
   };
 
@@ -327,9 +336,7 @@ const AssetDetailPage = () => {
   const handleDeleteConfig = async (ID) => {
     if (!ID) return message.warning("Không tìm thấy ID để xóa.");
     try {
-      const res = await axios.post(
-        `${API_URL}/api/asset/assetconfig/delete/${ID}`
-      );
+      const res = await axios.post(`${API_URL}/api/asset/assetconfig/delete/${ID}`);
       if (res.data?.success) {
         message.success("Xóa cấu hình thành công!");
         await fetchDetail();
@@ -350,13 +357,13 @@ const AssetDetailPage = () => {
         Name: nullIfEmpty(values.Name),
         ManageCode: nullIfEmpty(values.ManageCode),
         AssetCode: nullIfEmpty(values.AssetCode),
-        CategoryID: nullIfEmpty(values.CategoryID), // required ở form
+        CategoryID: nullIfEmpty(values.CategoryID),
         ItemMasterID: nullIfEmpty(values.ItemMasterID),
         VendorID: nullIfEmpty(values.VendorID),
         PurchaseId: nullIfEmpty(values.PurchaseId),
         QRCode: nullIfEmpty(values.QRCode),
-        EmployeeID: values.EmployeeID ?? null,
-        SectionID: values.SectionID ?? null,
+        EmployeeID: currentManageType === "INDIVIDUAL" ? values.EmployeeID ?? null : null,
+        SectionID: currentManageType === "INDIVIDUAL" ? values.SectionID ?? null : null,
         SerialNumber: nullIfEmpty(values.SerialNumber),
         Quantity:
           currentManageType === "INDIVIDUAL"
@@ -376,10 +383,7 @@ const AssetDetailPage = () => {
             : Number(values.WarrantyMonth),
       };
 
-      const res = await axios.post(
-        `${API_URL}/api/asset/update/${asset.ID}`,
-        payload
-      );
+      const res = await axios.post(`${API_URL}/api/asset/update/${asset.ID}`, payload);
       if (res.data?.success) {
         message.success("Cập nhật thông tin Asset thành công!");
         setIsEditModalOpen(false);
@@ -405,14 +409,25 @@ const AssetDetailPage = () => {
     );
   }, [attributes, search]);
 
-  // ===== columns =====
+  // ===== columns (refactor) =====
+  const copyValue = async (val) => {
+    try {
+      await navigator.clipboard.writeText(String(val ?? ""));
+    } catch {}
+  };
+
   const columns = [
     {
       title: "Thuộc tính",
       dataIndex: "Name",
       width: "28%",
-      ellipsis: true,
+      ellipsis: { showTitle: false },
       sorter: (a, b) => (a.Name || "").localeCompare(b.Name || ""),
+      render: (v) => (
+        <Tooltip title={v || ""} placement="topLeft">
+          <Text strong>{v || "—"}</Text>
+        </Tooltip>
+      ),
     },
     {
       title: "Giá trị",
@@ -420,20 +435,50 @@ const AssetDetailPage = () => {
       width: "44%",
       render: (text, record) => {
         const isEditing = editingKey === record.ID;
-        return isEditing ? (
-          <Input
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            placeholder="Nhập giá trị..."
-            onPressEnter={() => handleUpdateConfig(record.ID, editValue)}
-            autoFocus
-          />
-        ) : (
-          text || (
-            <Tag color="default" style={{ opacity: 0.7 }}>
+        if (isEditing) {
+          return (
+            <Input
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              placeholder="Nhập giá trị…"
+              allowClear
+              autoFocus
+              onPressEnter={() => handleUpdateConfig(record.ID, editValue)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setEditingKey(null);
+                  setEditValue("");
+                }
+              }}
+            />
+          );
+        }
+        if (!text) {
+          return (
+            <Tag color="default" style={{ opacity: 0.75 }}>
               (Trống)
             </Tag>
-          )
+          );
+        }
+        return (
+          <Space size={6}>
+            <Tooltip title={String(text)} placement="topLeft">
+              <Paragraph
+                style={{ margin: 0, maxWidth: 420 }}
+                ellipsis={{ rows: 1, tooltip: false }}
+              >
+                {String(text)}
+              </Paragraph>
+            </Tooltip>
+            <Tooltip title="Sao chép">
+              <Button
+                type="text"
+                size="small"
+                icon={<CopyOutlined />}
+                onClick={() => copyValue(text)}
+              />
+            </Tooltip>
+          </Space>
         );
       },
     },
@@ -442,50 +487,55 @@ const AssetDetailPage = () => {
       dataIndex: "Unit",
       width: 120,
       align: "center",
-      render: (u) => u || "—",
+      render: (u) => (u ? <Tag color="blue">{u}</Tag> : "—"),
     },
     {
       title: "Thao tác",
       key: "actions",
       align: "center",
-      width: 180,
+      width: 190,
       render: (_, record) => {
         const isEditing = editingKey === record.ID;
         return (
           <Space>
             {isEditing ? (
               <>
-                <Button
-                  type="link"
-                  icon={<CheckOutlined />}
-                  onClick={() => handleUpdateConfig(record.ID, editValue)}
-                />
-                <Button
-                  type="link"
-                  icon={<CloseOutlined />}
-                  onClick={() => {
-                    setEditingKey(null);
-                    setEditValue("");
-                  }}
-                />
+                <Tooltip title="Lưu">
+                  <Button
+                    type="primary"
+                    icon={<CheckOutlined />}
+                    onClick={() => handleUpdateConfig(record.ID, editValue)}
+                  />
+                </Tooltip>
+                <Tooltip title="Hủy">
+                  <Button
+                    icon={<CloseOutlined />}
+                    onClick={() => {
+                      setEditingKey(null);
+                      setEditValue("");
+                    }}
+                  />
+                </Tooltip>
               </>
             ) : (
               <>
-                <Button
-                  type="link"
-                  icon={<EditOutlined />}
-                  onClick={() => {
-                    setEditingKey(record.ID);
-                    setEditValue(record.Value || "");
-                  }}
-                />
+                <Tooltip title="Chỉnh sửa">
+                  <Button
+                    type="default"
+                    icon={<EditOutlined />}
+                    onClick={() => {
+                      setEditingKey(record.ID);
+                      setEditValue(record.Value || "");
+                    }}
+                  />
+                </Tooltip>
                 <Popconfirm
                   title="Xác nhận xóa cấu hình này?"
-                  onConfirm={() => handleDeleteConfig(record.ID)}
                   okText="Xóa"
                   cancelText="Hủy"
+                  onConfirm={() => handleDeleteConfig(record.ID)}
                 >
-                  <Button type="link" danger icon={<DeleteOutlined />} />
+                  <Button danger icon={<DeleteOutlined />} />
                 </Popconfirm>
               </>
             )}
@@ -530,6 +580,7 @@ const AssetDetailPage = () => {
             <span style={{ fontWeight: 700 }}>{asset.Name}</span>
             <Tag>{asset.ManageCode}</Tag>
             {statusTag(asset.Status)}
+            {manageType ? <Tag color={isIndividual ? "purple" : "cyan"}>{manageType}</Tag> : null}
           </Space>
         }
         extra={
@@ -584,26 +635,22 @@ const AssetDetailPage = () => {
               <Descriptions.Item label="Số lượng">
                 {asset.Quantity ?? "—"}
               </Descriptions.Item>
+              <Descriptions.Item label="Số lượng còn lại">
+                <Tag color={asset.RemainQuantity > 0 ? "green" : "red"}>
+                  {asset.RemainQuantity ?? 0}
+                </Tag>
+              </Descriptions.Item>
               <Descriptions.Item label="Mã QR">
-              <Space wrap>
-                
-                <Button
-                  size="small"
-                  icon={<QrcodeOutlined />}
-                  onClick={() => showQr(false)}
-                >
-                  Xem QR
-                </Button>
-                <a
-                  href={`${API_URL}/api/qr/${asset.ID}/qr.png`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <Button size="small" icon={<DownloadOutlined />}>
-                    Tải PNG
+                <Space wrap>
+                  <Button size="small" icon={<QrcodeOutlined />} onClick={() => showQr(false)}>
+                    Xem QR
                   </Button>
-                </a>
-              </Space>
+                  <a href={`${API_URL}/api/qr/${asset.ID}/qr.png`} target="_blank" rel="noreferrer">
+                    <Button size="small" icon={<DownloadOutlined />}>
+                      Tải PNG
+                    </Button>
+                  </a>
+                </Space>
               </Descriptions.Item>
             </Descriptions>
           </Col>
@@ -637,12 +684,18 @@ const AssetDetailPage = () => {
               <Descriptions.Item label="Số tháng BH">
                 {asset.WarrantyMonth ?? "—"}
               </Descriptions.Item>
-              <Descriptions.Item label="Nhân viên">
-                {asset.EmployeeName || asset.EmployeeID || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Bộ phận">
-                {asset.DepartmentName || asset.SectionID || "—"}
-              </Descriptions.Item>
+
+              {/* ⬇️ Chỉ hiển thị khi INDIVIDUAL */}
+              {isIndividual && (
+                <>
+                  <Descriptions.Item label="Nhân viên">
+                    {asset.EmployeeName || asset.EmployeeID || "—"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Bộ phận">
+                    {asset.DepartmentName || asset.SectionID || "—"}
+                  </Descriptions.Item>
+                </>
+              )}
             </Descriptions>
           </Col>
         </Row>
@@ -666,8 +719,7 @@ const AssetDetailPage = () => {
             onChange={(e) => setSearch(e.target.value)}
           />
           <Tag>
-            Tổng: {attributes?.length || 0} | Hiển thị:{" "}
-            {filteredAttributes?.length || 0}
+            Tổng: {attributes?.length || 0} | Hiển thị: {filteredAttributes?.length || 0}
           </Tag>
         </div>
 
@@ -706,32 +758,22 @@ const AssetDetailPage = () => {
             >
               {(allAttributes || []).map((a) => (
                 <Option key={a.ID} value={a.ID}>
-                  {a.MeasurementUnit
-                    ? `${a.Name} (${a.MeasurementUnit})`
-                    : a.Name}
+                  {a.MeasurementUnit ? `${a.Name} (${a.MeasurementUnit})` : a.Name}
                 </Option>
               ))}
             </Select>
           </Form.Item>
 
-          <Form.Item
-            noStyle
-            shouldUpdate={(prev, curr) => prev.AttributeID !== curr.AttributeID}
-          >
+          <Form.Item noStyle shouldUpdate={(prev, curr) => prev.AttributeID !== curr.AttributeID}>
             {({ getFieldValue }) => {
               const selId = getFieldValue("AttributeID");
-              const meta =
-                (allAttributes || []).find((x) => x.ID === selId) || {};
+              const meta = (allAttributes || []).find((x) => x.ID === selId) || {};
               const unit = meta?.MeasurementUnit || meta?.Unit || undefined;
               const placeholder = meta?.Name
                 ? `Nhập ${meta.Name}${unit ? ` (${unit})` : ""}`
                 : "Nhập giá trị cấu hình";
               return (
-                <Form.Item
-                  label="Giá trị"
-                  name="Value"
-                  rules={[{ required: true, message: "Nhập giá trị!" }]}
-                >
+                <Form.Item label="Giá trị" name="Value" rules={[{ required: true, message: "Nhập giá trị!" }]}>
                   <Input placeholder={placeholder} addonAfter={unit} />
                 </Form.Item>
               );
@@ -785,12 +827,7 @@ const AssetDetailPage = () => {
                 name="CategoryID"
                 rules={[{ required: true, message: "Chọn danh mục" }]}
               >
-                <Select
-                  showSearch
-                  allowClear
-                  placeholder="Chọn danh mục"
-                  optionFilterProp="children"
-                >
+                <Select showSearch allowClear placeholder="Chọn danh mục" optionFilterProp="children">
                   {categories.map((c) => (
                     <Option key={c.ID} value={c.ID}>
                       {c.Name}
@@ -816,16 +853,19 @@ const AssetDetailPage = () => {
                   ))}
                 </Select>
               </Form.Item>
+              {currentManageType && (
+                <div style={{ marginTop: -8, marginBottom: 8, opacity: 0.75 }}>
+                  Kiểu quản lý:{" "}
+                  <Tag color={currentManageType === "INDIVIDUAL" ? "purple" : "cyan"}>
+                    {currentManageType}
+                  </Tag>
+                </div>
+              )}
             </Col>
 
             <Col span={12}>
               <Form.Item label="Nhà cung cấp" name="VendorID">
-                <Select
-                  showSearch
-                  allowClear
-                  placeholder="Chọn Vendor"
-                  optionFilterProp="children"
-                >
+                <Select showSearch allowClear placeholder="Chọn Vendor" optionFilterProp="children">
                   {vendors.map((v) => (
                     <Option key={v.ID} value={v.ID}>
                       {v.Name}
@@ -849,52 +889,31 @@ const AssetDetailPage = () => {
 
             <Col span={12}>
               <Form.Item label="Ngày mua" name="PurchaseDate">
-                <DatePicker
-                  format="YYYY-MM-DD"
-                  style={{ width: "100%" }}
-                  placeholder="Chọn ngày mua"
-                />
+                <DatePicker format="YYYY-MM-DD" style={{ width: "100%" }} placeholder="Chọn ngày mua" />
               </Form.Item>
             </Col>
 
             <Col span={12}>
               <Form.Item label="Giá mua" name="PurchasePrice">
-                <InputNumber
-                  min={0}
-                  step={100000}
-                  style={{ width: "100%" }}
-                  placeholder="VD: 15,000,000"
-                />
+                <InputNumber min={0} step={100000} style={{ width: "100%" }} placeholder="VD: 15,000,000" />
               </Form.Item>
             </Col>
 
             <Col span={12}>
               <Form.Item label="Bảo hành bắt đầu" name="WarrantyStartDate">
-                <DatePicker
-                  format="YYYY-MM-DD"
-                  style={{ width: "100%" }}
-                  placeholder="Chọn ngày bắt đầu"
-                />
+                <DatePicker format="YYYY-MM-DD" style={{ width: "100%" }} placeholder="Chọn ngày bắt đầu" />
               </Form.Item>
             </Col>
 
             <Col span={12}>
               <Form.Item label="Bảo hành kết thúc" name="WarrantyEndDate">
-                <DatePicker
-                  format="YYYY-MM-DD"
-                  style={{ width: "100%" }}
-                  placeholder="Chọn ngày kết thúc"
-                />
+                <DatePicker format="YYYY-MM-DD" style={{ width: "100%" }} placeholder="Chọn ngày kết thúc" />
               </Form.Item>
             </Col>
 
             <Col span={12}>
               <Form.Item label="Số tháng bảo hành" name="WarrantyMonth">
-                <InputNumber
-                  min={0}
-                  style={{ width: "100%" }}
-                  placeholder="VD: 12"
-                />
+                <InputNumber min={0} style={{ width: "100%" }} placeholder="VD: 12" />
               </Form.Item>
             </Col>
 
@@ -904,30 +923,34 @@ const AssetDetailPage = () => {
               </Form.Item>
             </Col>
 
-            {/* ====== Trong Modal Cập nhật Asset ====== */}
-            <Col span={12}>
-              <Form.Item label="Người sử dụng" name="EmployeeID">
-                <Select
-                  showSearch
-                  allowClear
-                  placeholder="Chọn người dùng"
-                  options={employees}
-                  optionFilterProp="label"
-                />
-              </Form.Item>
-            </Col>
+            {/* ⬇️ Chỉ render khi INDIVIDUAL */}
+            {currentManageType === "INDIVIDUAL" && (
+              <>
+                <Col span={12}>
+                  <Form.Item label="Người sử dụng" name="EmployeeID">
+                    <Select
+                      showSearch
+                      allowClear
+                      placeholder="Chọn người dùng"
+                      options={employees}
+                      optionFilterProp="label"
+                    />
+                  </Form.Item>
+                </Col>
 
-            <Col span={12}>
-              <Form.Item label="Phòng ban" name="SectionID">
-                <Select
-                  showSearch
-                  allowClear
-                  placeholder="Chọn phòng ban"
-                  options={departments}
-                  optionFilterProp="label"
-                />
-              </Form.Item>
-            </Col>
+                <Col span={12}>
+                  <Form.Item label="Phòng ban" name="SectionID">
+                    <Select
+                      showSearch
+                      allowClear
+                      placeholder="Chọn phòng ban"
+                      options={departments}
+                      optionFilterProp="label"
+                    />
+                  </Form.Item>
+                </Col>
+              </>
+            )}
 
             <Col span={12}>
               <Form.Item label="Số lượng" name="Quantity">
@@ -954,10 +977,10 @@ const AssetDetailPage = () => {
           </Row>
         </Form>
       </Modal>
+
       <QrPreviewModal
         open={qrState.open}
         title={qrState.title}
-        // Truyền đủ dữ liệu để modal tự chọn nguồn ảnh
         token={qrState.token}
         assetId={qrState.assetId}
         pngBase64={qrState.pngBase64}

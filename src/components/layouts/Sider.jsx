@@ -26,7 +26,7 @@ const siderItems = [
           { key: "/asset", label: "Tài sản" },
           { key: "/assethistory", label: "Lịch sử tài sản" },
           { key: "/schedulemaintenance", label: "Lên lịch bảo trì" },
-          { key: "/scheduleworkorder", label: "Thực hiện bảo trì" }
+          { key: "/scheduleworkorder", label: "Thực hiện bảo trì" },
         ],
       },
       {
@@ -53,10 +53,9 @@ const siderItems = [
   {
     key: "sub4",
     icon: <AppstoreOutlined />,
-    label: "Dịch vụ",
+    label: "Kiểm kê",
     children: [
-      { key: "/services", label: "Tổng quan" },
-      { key: "/requests", label: "Yêu cầu" },
+      { key: "/stocktake", label: "Tạo kiểm kê" },
     ],
   },
   {
@@ -67,12 +66,6 @@ const siderItems = [
       { key: "/settings/app", label: "Ứng dụng" },
       { key: "/settings/roles", label: "Phân quyền" },
     ],
-  },
-  {
-    key: "sub6",
-    icon: <NotificationOutlined />,
-    label: "Thông báo",
-    children: [{ key: "/notifications", label: "Tất cả" }],
   },
 ];
 

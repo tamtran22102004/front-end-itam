@@ -42,6 +42,8 @@ export default function AssetFormModal({
   const recordWithDayjs = editingAsset
     ? {
         ...editingAsset,
+        // ✅ đảm bảo có QRCode khi mở form
+        QRCode: editingAsset.QRCode ?? null,             // <<< NEW
         PurchaseDate: editingAsset.PurchaseDate ? dayjs(editingAsset.PurchaseDate) : null,
         WarrantyStartDate: editingAsset.WarrantyStartDate ? dayjs(editingAsset.WarrantyStartDate) : null,
         WarrantyEndDate: editingAsset.WarrantyEndDate ? dayjs(editingAsset.WarrantyEndDate) : null,
@@ -63,13 +65,26 @@ export default function AssetFormModal({
         }
       }}
     >
-      <Form form={form} layout="vertical" onFinish={(vals) => onSubmit(vals)} initialValues={initialValues}>
+      <Form
+        form={form}
+        layout="vertical"
+        onFinish={(vals) => onSubmit(vals)}  // nhớ đẩy cả vals.QRCode lên payload
+        initialValues={initialValues}
+      >
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Form.Item label="Tên thiết bị" name="Name" rules={[{ required: true, message: "Nhập tên thiết bị" }]}>
+          <Form.Item
+            label="Tên thiết bị"
+            name="Name"
+            rules={[{ required: true, message: "Nhập tên thiết bị" }]}
+          >
             <Input allowClear />
           </Form.Item>
 
-          <Form.Item label="Mã quản lý nội bộ" name="ManageCode" rules={[{ required: true, message: "Nhập mã quản lý nội bộ" }]}>
+          <Form.Item
+            label="Mã quản lý nội bộ"
+            name="ManageCode"
+            rules={[{ required: true, message: "Nhập mã quản lý nội bộ" }]}
+          >
             <Input allowClear />
           </Form.Item>
 
@@ -77,21 +92,37 @@ export default function AssetFormModal({
             <Input allowClear />
           </Form.Item>
 
-          <Form.Item label="Danh mục" name="CategoryID" rules={[{ required: true, message: "Chọn danh mục" }]}>
+          <Form.Item
+            label="Danh mục"
+            name="CategoryID"
+            rules={[{ required: true, message: "Chọn danh mục" }]}
+          >
             <Select showSearch allowClear placeholder="Chọn danh mục" optionFilterProp="children">
-              {categories.map((c) => <Option key={c.ID} value={c.ID}>{c.Name}</Option>)}
+              {categories.map((c) => (
+                <Option key={c.ID} value={c.ID}>{c.Name}</Option>
+              ))}
             </Select>
           </Form.Item>
 
           <Form.Item label="Thuộc dòng ItemMaster" name="ItemMasterID">
-            <Select showSearch allowClear placeholder="Chọn ItemMaster" optionFilterProp="children" onChange={handleItemMasterChange}>
-              {itemMasters.map((i) => <Option key={i.ID} value={i.ID}>{i.Name}</Option>)}
+            <Select
+              showSearch
+              allowClear
+              placeholder="Chọn ItemMaster"
+              optionFilterProp="children"
+              onChange={handleItemMasterChange}
+            >
+              {itemMasters.map((i) => (
+                <Option key={i.ID} value={i.ID}>{i.Name}</Option>
+              ))}
             </Select>
           </Form.Item>
 
           <Form.Item label="Nhà cung cấp" name="VendorID">
             <Select showSearch allowClear placeholder="Chọn Vendor" optionFilterProp="children">
-              {vendors.map((v) => <Option key={v.ID} value={v.ID}>{v.Name}</Option>)}
+              {vendors.map((v) => (
+                <Option key={v.ID} value={v.ID}>{v.Name}</Option>
+              ))}
             </Select>
           </Form.Item>
 
@@ -106,6 +137,31 @@ export default function AssetFormModal({
           <Form.Item label="Mã phiếu mua" name="PurchaseId">
             <Input allowClear />
           </Form.Item>
+
+          {/* ✅ NEW: Trường QRCode để không mất token khi update */}
+          <Form.Item
+            label="Nội dung QR (QRToken)"
+            name="QRCode"
+            tooltip="Giữ nguyên để bảo toàn QR hiện có. Xoá trắng để xoá QR."
+          >
+            <Form.Item noStyle shouldUpdate>
+              {({ getFieldValue }) => (
+                <Input
+                  allowClear
+                  placeholder="VD: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  suffix={
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<CopyOutlined />}
+                      onClick={() => copy(getFieldValue("QRCode") || "")}
+                    />
+                  }
+                />
+              )}
+            </Form.Item>
+          </Form.Item>
+          {/* --- END QR --- */}
 
           <Form.Item label="Ngày BH bắt đầu" name="WarrantyStartDate">
             <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" onChange={onWarrantyMonthsChange} />
@@ -167,7 +223,6 @@ export default function AssetFormModal({
             }}
           </Form.Item>
 
-          
           <Form.Item label="Trạng thái" name="Status" initialValue={1}>
             <Select>
               {STATUS_OPTIONS.map(({ value, label }) => (

@@ -17,6 +17,8 @@ import AssetHistoryPage from "../pages/AssetHistory";
 import ScheduleMaintenancePage from "../pages/ScheduleMaintenance";
 import ScheduleWorkOrderPage from "../pages/ScheduleWorkOrder";
 import RequestApprovalPage from "../pages/RequestApproval";
+import StocktakeWizardPage from "../pages/StocktakeWizard";
+import StocktakeSessionDetailPage from "../pages/StocktakeSessionDetail";
 const router = createBrowserRouter([
   {
     path: "/",
@@ -114,6 +116,24 @@ const router = createBrowserRouter([
           </PrivateRoute>
         ),
       },
+      {
+        path: "stocktake",
+        element: (
+          <PrivateRoute>
+            <StocktakeWizardPage />
+          </PrivateRoute>
+        ),
+      },
+      // router
+      {
+        path: "/stocktake/:id",
+        element: (
+          <PrivateRoute>
+            <StocktakeSessionDetailPage />
+          </PrivateRoute>
+        ),
+      },
+      
     ],
   },
 ]);
