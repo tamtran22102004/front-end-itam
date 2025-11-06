@@ -35,3 +35,9 @@ export const apiUpdateAsset = (id, payload) =>
   axios.post(`${API_URL}/api/asset/update/${id}`, payload);
 export const apiDeleteAsset = (id) =>
   axios.post(`${API_URL}/api/asset/delete/${id}`);
+// ---- Asset History ----
+export const apiGetAssetHistoryByAssetID = async (assetID) => {
+  const res = await axios.get(`${API_URL}/api/asset/assethistorydetail/${assetID}`, { assetID });
+  // server của bạn đôi lúc trả trực tiếp mảng, lúc khác bọc trong { data }
+  return Array.isArray(res.data) ? res.data : res.data?.data || [];
+};

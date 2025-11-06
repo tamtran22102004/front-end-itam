@@ -1,19 +1,41 @@
-// components/assets/AssetFormModal.jsx
-import { Button, DatePicker, Divider, Form, Input, InputNumber, Modal, Select, Space, Tag } from "antd";
+// src/components/assets/AssetFormModal.jsx
+import React from "react";
+import {
+  Button,
+  DatePicker,
+  Divider,
+  Drawer,
+  Form,
+  Input,
+  InputNumber,
+  Select,
+  Space,
+  Tag,
+  Typography,
+} from "antd";
 import dayjs from "dayjs";
 import { CopyOutlined } from "@ant-design/icons";
+
 const { Option } = Select;
+const { Text } = Typography;
 
 export default function AssetFormModal({
-  open, onCancel, onSubmit, editingAsset,
-  categories, itemMasters, vendors,
-  getIMById, currentManageType, setCurrentManageType,
+  open,
+  onCancel,
+  onSubmit,
+  editingAsset,
+  categories = [],
+  itemMasters = [],
+  vendors = [],
+  getIMById = () => null,
+  currentManageType,
+  setCurrentManageType = () => {},
   STATUS_OPTIONS = [],
 }) {
   const [form] = Form.useForm();
 
   const handleItemMasterChange = (id) => {
-    const im = getIMById(id);
+    const im = getIMById?.(id);
     if (im) {
       if (im.CategoryID) form.setFieldsValue({ CategoryID: im.CategoryID });
       setCurrentManageType(im.ManageType || null);
@@ -34,16 +56,16 @@ export default function AssetFormModal({
   };
 
   const copy = async (text) => {
-    try { await navigator.clipboard.writeText(text); } catch {}
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {}
   };
 
-  // init when open
   const initialValues = { Quantity: 1, Status: 1 };
   const recordWithDayjs = editingAsset
     ? {
         ...editingAsset,
-        // ✅ đảm bảo có QRCode khi mở form
-        QRCode: editingAsset.QRCode ?? null,             // <<< NEW
+        QRCode: editingAsset.QRCode ?? null,
         PurchaseDate: editingAsset.PurchaseDate ? dayjs(editingAsset.PurchaseDate) : null,
         WarrantyStartDate: editingAsset.WarrantyStartDate ? dayjs(editingAsset.WarrantyStartDate) : null,
         WarrantyEndDate: editingAsset.WarrantyEndDate ? dayjs(editingAsset.WarrantyEndDate) : null,
@@ -51,24 +73,62 @@ export default function AssetFormModal({
     : initialValues;
 
   return (
-    <Modal
-      title={editingAsset ? "Cập nhật Asset" : "Thêm Asset mới"}
+    <Drawer
       open={open}
-      onCancel={onCancel}
-      footer={null}
-      destroyOnClose
+      onClose={onCancel}
+      placement="right"
       width={820}
+      destroyOnClose
+      title={
+        <Space direction="vertical" size={0}>
+          <Text strong style={{ fontSize: 16 }}>
+            {editingAsset ? "Cập nhật Asset" : "Thêm Asset mới"}
+          </Text>
+          {editingAsset?.ID ? (
+            <Text type="secondary">
+              ID:&nbsp;
+              <code
+                style={{
+                  background: "#f5f5f5",
+                  border: "1px solid #eee",
+                  borderRadius: 6,
+                  padding: "2px 6px",
+                  color: "#555",
+                }}
+              >
+                {String(editingAsset.ID).slice(0, 8)}…{String(editingAsset.ID).slice(-4)}
+              </code>
+            </Text>
+          ) : null}
+        </Space>
+      }
       afterOpenChange={(opened) => {
         if (opened) {
           form.resetFields();
           form.setFieldsValue(recordWithDayjs);
         }
       }}
+      styles={{
+        body: { paddingTop: 8, paddingBottom: 0 },
+        header: { borderBottom: "1px solid #f0f0f0" },
+      }}
+      extra={
+        editingAsset?.QRCode ? (
+          <Button
+            size="small"
+            type="text"
+            icon={<CopyOutlined />}
+            onClick={() => copy(editingAsset?.QRCode)}
+          >
+            Copy QR
+          </Button>
+        ) : null
+      }
     >
       <Form
         form={form}
         layout="vertical"
-        onFinish={(vals) => onSubmit(vals)}  // nhớ đẩy cả vals.QRCode lên payload
+        onFinish={(vals) => onSubmit(vals)}
         initialValues={initialValues}
       >
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -98,8 +158,10 @@ export default function AssetFormModal({
             rules={[{ required: true, message: "Chọn danh mục" }]}
           >
             <Select showSearch allowClear placeholder="Chọn danh mục" optionFilterProp="children">
-              {categories.map((c) => (
-                <Option key={c.ID} value={c.ID}>{c.Name}</Option>
+              {(categories || []).map((c) => (
+                <Option key={c.ID} value={c.ID}>
+                  {c.Name}
+                </Option>
               ))}
             </Select>
           </Form.Item>
@@ -112,16 +174,20 @@ export default function AssetFormModal({
               optionFilterProp="children"
               onChange={handleItemMasterChange}
             >
-              {itemMasters.map((i) => (
-                <Option key={i.ID} value={i.ID}>{i.Name}</Option>
+              {(itemMasters || []).map((i) => (
+                <Option key={i.ID} value={i.ID}>
+                  {i.Name}
+                </Option>
               ))}
             </Select>
           </Form.Item>
 
           <Form.Item label="Nhà cung cấp" name="VendorID">
             <Select showSearch allowClear placeholder="Chọn Vendor" optionFilterProp="children">
-              {vendors.map((v) => (
-                <Option key={v.ID} value={v.ID}>{v.Name}</Option>
+              {(vendors || []).map((v) => (
+                <Option key={v.ID} value={v.ID}>
+                  {v.Name}
+                </Option>
               ))}
             </Select>
           </Form.Item>
@@ -138,7 +204,7 @@ export default function AssetFormModal({
             <Input allowClear />
           </Form.Item>
 
-          {/* ✅ NEW: Trường QRCode để không mất token khi update */}
+          {/* QRCode giữ nguyên token khi update */}
           <Form.Item
             label="Nội dung QR (QRToken)"
             name="QRCode"
@@ -161,7 +227,6 @@ export default function AssetFormModal({
               )}
             </Form.Item>
           </Form.Item>
-          {/* --- END QR --- */}
 
           <Form.Item label="Ngày BH bắt đầu" name="WarrantyStartDate">
             <DatePicker style={{ width: "100%" }} format="YYYY-MM-DD" onChange={onWarrantyMonthsChange} />
@@ -190,8 +255,12 @@ export default function AssetFormModal({
             <InputNumber min={0} style={{ width: "100%" }} onChange={onWarrantyMonthsChange} />
           </Form.Item>
 
-          {/* Dynamic by ManageType */}
-          <Form.Item noStyle shouldUpdate={(prev, curr) => prev.ItemMasterID !== curr.ItemMasterID || prev.Quantity !== curr.Quantity}>
+          <Form.Item
+            noStyle
+            shouldUpdate={(prev, curr) =>
+              prev.ItemMasterID !== curr.ItemMasterID || prev.Quantity !== curr.Quantity
+            }
+          >
             {({ getFieldValue, setFieldsValue }) => {
               const imId = getFieldValue("ItemMasterID");
               const im = imId ? getIMById(imId) : null;
@@ -202,9 +271,18 @@ export default function AssetFormModal({
               return (
                 <>
                   <Form.Item
-                    label={<Space>SerialNumber {manageType === "INDIVIDUAL" && <Tag color="purple">INDIVIDUAL</Tag>}</Space>}
+                    label={
+                      <Space>
+                        SerialNumber{" "}
+                        {manageType === "INDIVIDUAL" && <Tag color="purple">INDIVIDUAL</Tag>}
+                      </Space>
+                    }
                     name="SerialNumber"
-                    rules={manageType === "INDIVIDUAL" ? [{ required: true, message: "Nhập SerialNumber cho thiết bị INDIVIDUAL" }] : []}
+                    rules={
+                      manageType === "INDIVIDUAL"
+                        ? [{ required: true, message: "Nhập SerialNumber cho thiết bị INDIVIDUAL" }]
+                        : []
+                    }
                   >
                     <Input allowClear placeholder="VD: SN12345" />
                   </Form.Item>
@@ -225,21 +303,34 @@ export default function AssetFormModal({
 
           <Form.Item label="Trạng thái" name="Status" initialValue={1}>
             <Select>
-              {STATUS_OPTIONS.map(({ value, label }) => (
-                <Option key={value} value={value}>{label}</Option>
+              {(STATUS_OPTIONS || []).map(({ value, label }) => (
+                <Option key={value} value={value}>
+                  {label}
+                </Option>
               ))}
             </Select>
           </Form.Item>
         </div>
 
-        <Divider style={{ margin: "8px 0" }} />
-        <Form.Item style={{ textAlign: "right", marginBottom: 0 }}>
-          <Button onClick={onCancel}>Hủy</Button>
-          <Button type="primary" htmlType="submit" style={{ marginLeft: 8 }}>
-            {editingAsset ? "Cập nhật" : "Lưu"}
-          </Button>
-        </Form.Item>
+        {/* Sticky footer trong Drawer */}
+        <Divider style={{ margin: "10px 0 8px" }} />
+        <div
+          style={{
+            position: "sticky",
+            bottom: 0,
+            background: "#fff",
+            padding: "8px 0 0",
+            textAlign: "right",
+          }}
+        >
+          <Space>
+            <Button onClick={onCancel}>Hủy</Button>
+            <Button type="primary" htmlType="submit">
+              {editingAsset ? "Cập nhật" : "Lưu"}
+            </Button>
+          </Space>
+        </div>
       </Form>
-    </Modal>
+    </Drawer>
   );
 }

@@ -18,7 +18,7 @@ import {
 import AssetSummary from "../components/assets/AssetSummary";
 import AssetFilters from "../components/assets/AssetFilters";
 import AssetTable from "../components/assets/AssetTable";
-import AssetFormModal from "../components/assets/AssetFormModal";
+import AssetFormDrawer from "../components/assets/AssetFormDrawer";
 import QrPreviewModal from "../components/assets/QrPreviewModal";
 import { STATUS_MAP } from "../constants/asset";
 import { exportAssetsCSV } from "../utils/csv";
@@ -252,7 +252,7 @@ export default function AssetPage() {
         />
 
         {/* Modal */}
-        <AssetFormModal
+        <AssetFormDrawer
           open={openModal}
           onCancel={() => {
             setOpenModal(false);

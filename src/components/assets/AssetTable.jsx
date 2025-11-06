@@ -10,6 +10,7 @@ import {
 } from "@ant-design/icons";
 import { STATUS_MAP } from "../../constants/asset";
 import { fmtDate, fmtMoney, isWarrantyActive } from "../../utils/format";
+import AssetHistoryTrigger from "./AssetHistoryTrigger";
 
 const copy = async (text) => {
   try {
@@ -213,7 +214,7 @@ export default function AssetTable({
       key: "RemainQuantity",
       width: 90,
       align: "center",
-      render: (v) => {v ?? "—"},
+      render: (v) => v ?? "—",
     },
 
     // 🔕 ĐÃ ẨN hai cột Số lượng / Số lượng còn lại theo yêu cầu
@@ -270,6 +271,13 @@ export default function AssetTable({
           <Tooltip title="Chỉnh sửa">
             <Button icon={<EditOutlined />} onClick={() => onEdit(record)} />
           </Tooltip>
+          {/* nút Xem / Chỉnh sửa / Xóa của bạn ở đây */}
+          <AssetHistoryTrigger
+            assetID={record.ID || record.AssetID}
+            assetName={record.Name || record.AssetName}
+            userNameMap={userNameMap}
+            deptNameMap={deptNameMap}
+          />
           <Popconfirm
             title="Bạn có chắc muốn xóa tài sản này?"
             onConfirm={() => onDelete(record.ID)}
