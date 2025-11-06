@@ -1,9 +1,10 @@
 import React from "react";
-import { createBrowserRouter } from "react-router-dom";
+import { createHashRouter } from "react-router-dom";
 
 import App from "../App";
 import PrivateRoute from "../components/PrivateRoute";
 import AppLayout from "../components/layouts/AppLayout";
+
 import LoginPage from "../pages/Login";
 import RegisterPage from "../pages/Register";
 import CategoryPage from "../pages/Category";
@@ -19,14 +20,28 @@ import ScheduleWorkOrderPage from "../pages/ScheduleWorkOrder";
 import RequestApprovalPage from "../pages/RequestApproval";
 import StocktakeWizardPage from "../pages/StocktakeWizard";
 import StocktakeSessionDetailPage from "../pages/StocktakeSessionDetail";
-import HomePage from"../pages/Home";
-const router = createBrowserRouter([
+import HomePage from "../pages/Home";
+
+const router = createHashRouter([
   {
     path: "/",
     element: <AppLayout />,
     children: [
+      // Home làm index route để tránh xung đột với nested paths
+      {
+        index: true,
+        element: (
+          <PrivateRoute>
+            <HomePage />
+          </PrivateRoute>
+        ),
+      },
+
+      // public
       { path: "login", element: <LoginPage /> },
       { path: "register", element: <RegisterPage /> },
+
+      // protected
       {
         path: "category",
         element: (
@@ -91,7 +106,6 @@ const router = createBrowserRouter([
           </PrivateRoute>
         ),
       },
-
       {
         path: "schedulemaintenance",
         element: (
@@ -108,7 +122,6 @@ const router = createBrowserRouter([
           </PrivateRoute>
         ),
       },
-
       {
         path: "requestapproval",
         element: (
@@ -125,24 +138,18 @@ const router = createBrowserRouter([
           </PrivateRoute>
         ),
       },
-      // router
+      // ⬇️ Quan trọng: KHÔNG dùng leading slash trong child path
       {
-        path: "/stocktake/:id",
+        path: "stocktake/:id",
         element: (
           <PrivateRoute>
             <StocktakeSessionDetailPage />
           </PrivateRoute>
         ),
       },
-      {
-        path:"/",
-        element:(
-          <PrivateRoute>
-            <HomePage/>
-          </PrivateRoute>
-        )
-      }
-      
+
+      // 404
+      { path: "*", element: <div style={{ padding: 24 }}>Not Found</div> },
     ],
   },
 ]);
