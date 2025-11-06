@@ -1,7 +1,6 @@
 import React from "react";
 import { createHashRouter } from "react-router-dom";
 
-import App from "../App";
 import PrivateRoute from "../components/PrivateRoute";
 import AppLayout from "../components/layouts/AppLayout";
 
@@ -21,13 +20,14 @@ import RequestApprovalPage from "../pages/RequestApproval";
 import StocktakeWizardPage from "../pages/StocktakeWizard";
 import StocktakeSessionDetailPage from "../pages/StocktakeSessionDetail";
 import HomePage from "../pages/Home";
+import NotFound from "../pages/NotFound"; // ⬅️ mới thêm
 
 const router = createHashRouter([
   {
     path: "/",
     element: <AppLayout />,
+    errorElement: <NotFound />, // ⬅️ chỉ cần dòng này, KHÔNG cần path "*"
     children: [
-      // Home làm index route để tránh xung đột với nested paths
       {
         index: true,
         element: (
@@ -138,7 +138,6 @@ const router = createHashRouter([
           </PrivateRoute>
         ),
       },
-      // ⬇️ Quan trọng: KHÔNG dùng leading slash trong child path
       {
         path: "stocktake/:id",
         element: (
@@ -147,9 +146,6 @@ const router = createHashRouter([
           </PrivateRoute>
         ),
       },
-
-      // 404
-      { path: "*", element: <div style={{ padding: 24 }}>Not Found</div> },
     ],
   },
 ]);
