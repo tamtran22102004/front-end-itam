@@ -2,41 +2,54 @@ import React, { useState, useEffect } from "react";
 import {
   AppstoreOutlined,
   MailOutlined,
-  SettingOutlined,
+  DatabaseOutlined,
   UserOutlined,
 } from "@ant-design/icons";
 import { Menu, Button, Avatar, Dropdown } from "antd";
 import { useNavigate } from "react-router-dom";
-
-// Import CSS từ thư mục styles
 import "../../styles/Header.css";
 
 const Header = () => {
-  const [current, setCurrent] = useState("mail");
+  const [current, setCurrent] = useState("home");
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
 
+  // 🔹 Lấy thông tin người dùng từ localStorage
   useEffect(() => {
-  try {
-    const savedUser = localStorage.getItem("user");
-    if (savedUser && savedUser !== "undefined") {
-      setUser(JSON.parse(savedUser));
-    } else {
+    try {
+      const savedUser = localStorage.getItem("user");
+      if (savedUser && savedUser !== "undefined") {
+        setUser(JSON.parse(savedUser));
+      } else {
+        setUser(null);
+      }
+    } catch (error) {
+      console.error("Lỗi khi parse user:", error);
       setUser(null);
     }
-  } catch (error) {
-    console.error("Lỗi khi parse user:", error);
-    setUser(null);
-  }
-}, []);
+  }, []);
 
-
-  const onClick = (e) => {
+  // 🔹 Xử lý khi click menu
+  const handleMenuClick = (e) => {
     setCurrent(e.key);
-    if (e.key === "home") navigate("/home");
-    if (e.key === "services") navigate("/services");
+
+    // Nếu key bắt đầu bằng "/", ta điều hướng trực tiếp
+    if (e.key.startsWith("/")) {
+      navigate(e.key);
+      return;
+    }
+
+    // Các key đặc biệt khác
+    switch (e.key) {
+      case "home":
+        navigate("/");
+        break;
+      default:
+        break;
+    }
   };
 
+  // 🔹 Đăng xuất
   const handleLogout = () => {
     localStorage.removeItem("user");
     localStorage.removeItem("token");
@@ -44,60 +57,60 @@ const Header = () => {
     navigate("/login");
   };
 
-  const items = [
+  // 🔹 Cấu trúc menu chính
+  const menuItems = [
     { label: "Trang chủ", key: "home", icon: <MailOutlined /> },
-    { label: "Dịch vụ", key: "services", icon: <AppstoreOutlined /> },
     {
-      label: "Cài đặt",
-      key: "settings",
-      icon: <SettingOutlined />,
+      key: "requests",
+      icon: <DatabaseOutlined />,
+      label: "Yêu cầu & Duyệt",
       children: [
-        {
-          type: "group",
-          label: "Nhóm 1",
-          children: [
-            { label: "Option 1", key: "setting:1" },
-            { label: "Option 2", key: "setting:2" },
-          ],
-        },
-        {
-          type: "group",
-          label: "Nhóm 2",
-          children: [
-            { label: "Option 3", key: "setting:3" },
-            { label: "Option 4", key: "setting:4" },
-          ],
-        },
+        { key: "/request", label: "Yêu cầu" },
+        { key: "/requestapproval", label: "Duyệt yêu cầu" },
       ],
+    },
+    {
+      key: "inventory",
+      icon: <AppstoreOutlined />,
+      label: "Kiểm kê",
+      children: [{ key: "/stocktake", label: "Tạo kiểm kê" }],
     },
   ];
 
+  // 🔹 Menu người dùng
   const userMenu = (
-    <Menu>
-      <Menu.Item key="profile">Hồ sơ</Menu.Item>
-      <Menu.Item key="logout" onClick={handleLogout}>
-        Đăng xuất
-      </Menu.Item>
-    </Menu>
+    <Menu
+      onClick={({ key }) => {
+        if (key === "profile") navigate("/profile");
+        if (key === "logout") handleLogout();
+      }}
+      items={[
+        { key: "profile", label: "Hồ sơ" },
+        { key: "logout", label: "Đăng xuất" },
+      ]}
+    />
   );
 
   return (
     <header className="header">
-      <div className="header-logo" onClick={() => navigate("/home")}>
+      {/* Logo */}
+      <div className="header-logo" onClick={() => navigate("/")}>
         ITAM
       </div>
 
+      {/* Thanh menu */}
       <Menu
-        onClick={onClick}
+        onClick={handleMenuClick}
         selectedKeys={[current]}
         mode="horizontal"
-        items={items}
+        items={menuItems}
         className="header-menu"
       />
 
+      {/* Người dùng */}
       <div className="header-user">
         {user ? (
-          <Dropdown overlay={userMenu} placement="bottomRight">
+          <Dropdown overlay={userMenu} placement="bottomRight" arrow>
             <div className="header-user-info">
               <Avatar src={user.avatar} icon={<UserOutlined />} />
               <span className="header-username">{user.fullname}</span>

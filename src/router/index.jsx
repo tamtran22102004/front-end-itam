@@ -19,6 +19,7 @@ import ScheduleWorkOrderPage from "../pages/ScheduleWorkOrder";
 import RequestApprovalPage from "../pages/RequestApproval";
 import StocktakeWizardPage from "../pages/StocktakeWizard";
 import StocktakeSessionDetailPage from "../pages/StocktakeSessionDetail";
+import HomePage from"../pages/Home";
 const router = createBrowserRouter([
   {
     path: "/",
@@ -133,6 +134,14 @@ const router = createBrowserRouter([
           </PrivateRoute>
         ),
       },
+      {
+        path:"/",
+        element:(
+          <PrivateRoute>
+            <HomePage/>
+          </PrivateRoute>
+        )
+      }
       
     ],
   },
