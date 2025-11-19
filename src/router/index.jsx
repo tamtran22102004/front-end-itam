@@ -1,3 +1,4 @@
+// src/router/index.jsx (hoặc file router của bạn)
 import React from "react";
 import { createHashRouter } from "react-router-dom";
 
@@ -20,19 +21,20 @@ import RequestApprovalPage from "../pages/RequestApproval";
 import StocktakeWizardPage from "../pages/StocktakeWizard";
 import StocktakeSessionDetailPage from "../pages/StocktakeSessionDetail";
 import HomePage from "../pages/Home";
-import NotFound from "../pages/NotFound"; // ⬅️ mới thêm
+import DashboardPage from "../pages/Dashboard";
+import NotFound from "../pages/NotFound";
 
 const router = createHashRouter([
   {
     path: "/",
     element: <AppLayout />,
-    errorElement: <NotFound />, // ⬅️ chỉ cần dòng này, KHÔNG cần path "*"
+    // KHÔNG còn errorElement ở đây nữa
     children: [
       {
         index: true,
         element: (
           <PrivateRoute>
-            <HomePage />
+            <DashboardPage />
           </PrivateRoute>
         ),
       },
@@ -145,6 +147,20 @@ const router = createHashRouter([
             <StocktakeSessionDetailPage />
           </PrivateRoute>
         ),
+      },
+      {
+        path: "home",
+        element: (
+          <PrivateRoute>
+            <HomePage />
+          </PrivateRoute>
+        ),
+      },
+
+      // ⬇️ CATCH-ALL phải để CUỐI cùng
+      {
+        path: "*",
+        element: <NotFound />,
       },
     ],
   },

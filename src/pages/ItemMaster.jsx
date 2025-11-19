@@ -353,30 +353,7 @@ const ItemMasterPage = () => {
       align: "center",
       render: (v) => manageTypeTag(v),
     },
-    {
-      title: "Tổng SL",
-      dataIndex: "TotalQuantity",
-      key: "TotalQuantity",
-      width: 110,
-      align: "center",
-      render: (v) => <Tag>{v ?? 0}</Tag>,
-    },
-    {
-      title: "Đang dùng",
-      dataIndex: "InUseQuantity",
-      key: "InUseQuantity",
-      width: 110,
-      align: "center",
-      render: (v) => <Tag color="blue">{v ?? 0}</Tag>,
-    },
-    {
-      title: "Còn lại",
-      dataIndex: "AvailableQuantity",
-      key: "AvailableQuantity",
-      width: 110,
-      align: "center",
-      render: (v) => <span>{stockTag(v)} <Text strong>{v ?? 0}</Text></span>,
-    },
+      
     {
       title: "Thao tác",
       key: "action",

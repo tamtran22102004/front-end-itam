@@ -8,7 +8,6 @@ import {
   message,
   Input,
   Button,
-  Popconfirm,
   Space,
   Modal,
   Form,
@@ -25,8 +24,6 @@ import {
 } from "antd";
 import {
   EditOutlined,
-  CheckOutlined,
-  CloseOutlined,
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
@@ -46,11 +43,26 @@ const API_URL = import.meta.env.VITE_BACKEND_URL;
 const SCHEDULE_BASE = `${API_URL}/api/maintenance/schedules`;
 const ASSETS_API = `${API_URL}/api/asset`;
 const USERS_API = `${API_URL}/api/getuserinfo`;
+const DEPTS_API = `${API_URL}/api/getdepartment`;
 
-const PRIORITY_COLOR = { LOW: "default", MEDIUM: "processing", HIGH: "error" };
-const STATUS_COLOR = { ACTIVE: "green", OVERDUE: "gold", COMPLETED: "default", CANCELLED: "red" };
-const statusTag = (st) => <Tag color={STATUS_COLOR[st] || "default"}>{st || "-"}</Tag>;
-const priorityTag = (p) => <Tag color={PRIORITY_COLOR[p] || "default"}>{p || "-"}</Tag>;
+const PRIORITY_COLOR = {
+  LOW: "default",
+  MEDIUM: "processing",
+  HIGH: "error",
+};
+const STATUS_COLOR = {
+  ACTIVE: "green",
+  OVERDUE: "gold",
+  COMPLETED: "default",
+  CANCELLED: "red",
+};
+
+const statusTag = (st) => (
+  <Tag color={STATUS_COLOR[st] || "default"}>{st || "-"}</Tag>
+);
+const priorityTag = (p) => (
+  <Tag color={PRIORITY_COLOR[p] || "default"}>{p || "-"}</Tag>
+);
 
 const pickArray = (res) => {
   const d = res?.data;
@@ -77,28 +89,29 @@ const MaintenanceSchedulePage = () => {
   const [selected, setSelected] = useState(null);
   const [search, setSearch] = useState("");
 
-  // meta
-  const [assets, setAssets] = useState([]); // {value,label}
+  // master data
+  const [assets, setAssets] = useState([]); // raw asset
   const [employees, setEmployees] = useState([]); // {value,label}
+  const [departments, setDepartments] = useState([]); // {value,label}
   const [userMap, setUserMap] = useState({}); // id -> name
 
   // modal form
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [editing, setEditing] = useState(null);
+  const [editing, setEditing] = useState(null); // record schedule
   const [form] = Form.useForm();
+
+  // asset filter trong modal
+  const [assetFilterDept, setAssetFilterDept] = useState();
+  const [assetFilterHolder, setAssetFilterHolder] = useState();
+  const [assetKw, setAssetKw] = useState("");
 
   // ===== FETCHERS =====
   const fetchAssets = async () => {
     try {
       const res = await axios.get(ASSETS_API);
       const data = pickArray(res) || [];
-      setAssets(
-        data.map((a) => ({
-          value: a.ID || a.Id || a.AssetID,
-          label: buildAssetLabel(a),
-        }))
-      );
+      setAssets(data);
     } catch (e) {
       console.error(e);
       message.warning("Không tải được danh sách tài sản.");
@@ -122,6 +135,21 @@ const MaintenanceSchedulePage = () => {
     }
   };
 
+  const fetchDepartments = async () => {
+    try {
+      const res = await axios.get(DEPTS_API);
+      const data = pickArray(res) || [];
+      const list = data.map((d) => ({
+        value: d.DepartmentID ?? d.ID,
+        label: d.DepartmentName ?? d.Name,
+      }));
+      setDepartments(list);
+    } catch (e) {
+      console.error(e);
+      message.warning("Không tải được danh sách phòng ban.");
+    }
+  };
+
   const fetchSchedules = async () => {
     setLoading(true);
     try {
@@ -138,14 +166,75 @@ const MaintenanceSchedulePage = () => {
   useEffect(() => {
     fetchAssets();
     fetchUsers();
+    fetchDepartments();
     fetchSchedules();
   }, []);
+
+  // ===== Helpers map id -> name =====
+  const deptName = (id) =>
+    departments.find((d) => String(d.value) === String(id))?.label || "";
+
+  const userName = (id) =>
+    employees.find((u) => String(u.value) === String(id))?.label || "";
+
+  const renderUser = (uid) => (uid ? userMap[Number(uid)] || uid : "—");
+
+  // ===== Asset options with filter (dept + holder + search) =====
+  const assetSelectOptions = useMemo(() => {
+    let list = assets || [];
+
+    if (assetFilterDept) {
+      list = list.filter(
+        (a) =>
+          String(a.SectionID ?? a.DepartmentID ?? "") ===
+          String(assetFilterDept)
+      );
+    }
+
+    if (assetFilterHolder) {
+      list = list.filter(
+        (a) =>
+          String(
+            a.EmployeeID ?? a.CurrentUserID ?? a.OwnerUserID ?? ""
+          ) === String(assetFilterHolder)
+      );
+    }
+
+    const q = assetKw.trim().toLowerCase();
+    if (q) {
+      list = list.filter((a) => {
+        const name = (a.Name || a.AssetName || "").toLowerCase();
+        const code = (a.ManageCode || a.AssetCode || "").toLowerCase();
+        const serial = (a.SerialNumber || "").toLowerCase();
+        return name.includes(q) || code.includes(q) || serial.includes(q);
+      });
+    }
+
+    return list.map((a) => {
+      const id = a.ID ?? a.Id ?? a.AssetID;
+      const dept = deptName(a.SectionID ?? a.DepartmentID);
+      const holder = userName(
+        a.EmployeeID ?? a.CurrentUserID ?? a.OwnerUserID
+      );
+      let extra = [];
+      if (dept) extra.push(dept);
+      if (holder) extra.push(holder);
+      const extraStr = extra.length ? " • " + extra.join(" • ") : "";
+      return {
+        value: id,
+        label: buildAssetLabel(a) + extraStr,
+      };
+    });
+  }, [assets, assetFilterDept, assetFilterHolder, assetKw, departments, employees]);
 
   // ===== ACTIONS =====
   const openCreate = () => {
     setEditing(null);
+    setAssetFilterDept(undefined);
+    setAssetFilterHolder(undefined);
+    setAssetKw("");
+
     form.resetFields();
-    // set default trong modal
     form.setFieldsValue({
       Priority: "MEDIUM",
       ReminderDaysBefore: 7,
@@ -156,18 +245,21 @@ const MaintenanceSchedulePage = () => {
 
   const openEdit = (record) => {
     setEditing(record);
+    setAssetFilterDept(undefined);
+    setAssetFilterHolder(undefined);
+    setAssetKw("");
+
+    form.resetFields();
     form.setFieldsValue({
-      AssetID: record.AssetID,
-      AssignedToUserID: record.AssignedToUserID != null ? Number(record.AssignedToUserID) : undefined,
+      Title: record.Title || "",
       IntervalMonths: record.IntervalMonths ?? undefined,
-      NextMaintenanceDate: record.NextMaintenanceDate ? dayjs(record.NextMaintenanceDate) : null,
-      ReminderDaysBefore: record.ReminderDaysBefore ?? 7,
-      WindowStart: record.WindowStart ? dayjs(record.WindowStart, "HH:mm:ss") : null,
-      WindowEnd: record.WindowEnd ? dayjs(record.WindowEnd, "HH:mm:ss") : null,
-      EstimatedHours: record.EstimatedHours ?? undefined,
+      NextMaintenanceDate: record.NextMaintenanceDate
+        ? dayjs(record.NextMaintenanceDate)
+        : null,
       Priority: record.Priority || "MEDIUM",
       Notes: record.Notes || "",
       AutoCreateWorkOrder: Boolean(record.AutoCreateWorkOrder ?? true),
+      ReminderDaysBefore: 7, // chỉ dùng khi tạo, edit header không dùng
     });
     setIsModalOpen(true);
   };
@@ -175,28 +267,53 @@ const MaintenanceSchedulePage = () => {
   const handleSave = async () => {
     try {
       const v = await form.validateFields();
-      const payload = {
-        AssetID: v.AssetID,
-        AssignedToUserID: v.AssignedToUserID != null ? Number(v.AssignedToUserID) : null,
+
+      const baseHeader = {
+        Title: v.Title,
         IntervalMonths: v.IntervalMonths ?? null,
         NextMaintenanceDate: v.NextMaintenanceDate?.format("YYYY-MM-DD"),
-        ReminderDaysBefore: v.ReminderDaysBefore ?? 7,
-        WindowStart: v.WindowStart ? v.WindowStart.format("HH:mm:ss") : null,
-        WindowEnd: v.WindowEnd ? v.WindowEnd.format("HH:mm:ss") : null,
-        EstimatedHours: v.EstimatedHours ?? null,
         Priority: v.Priority || "MEDIUM",
         Notes: v.Notes || null,
         AutoCreateWorkOrder: Boolean(v.AutoCreateWorkOrder ?? true),
       };
 
       setSaving(true);
+
       if (editing?.ScheduleID) {
-        await axios.patch(`${SCHEDULE_BASE}/${editing.ScheduleID}`, payload);
-        message.success("Cập nhật lịch thành công.");
+        // Update header schedule (KHÔNG sửa danh sách asset)
+        await axios.patch(`${SCHEDULE_BASE}/${editing.ScheduleID}`, baseHeader);
+        message.success("Cập nhật kế hoạch bảo trì thành công.");
       } else {
+        // Create mới – multi assets
+        const assetIds = v.AssetIDs || [];
+        if (!assetIds.length) {
+          message.error("Vui lòng chọn ít nhất một tài sản.");
+          setSaving(false);
+          return;
+        }
+
+        const assetsPayload = assetIds.map((id) => ({
+          AssetID: id,
+          AssignedToUserID:
+            v.AssignedToUserID != null ? Number(v.AssignedToUserID) : null,
+          ReminderDaysBefore: v.ReminderDaysBefore ?? 7,
+          WindowStart: v.WindowStart ? v.WindowStart.format("HH:mm:ss") : null,
+          WindowEnd: v.WindowEnd ? v.WindowEnd.format("HH:mm:ss") : null,
+          EstimatedHours: v.EstimatedHours ?? null,
+        }));
+
+        const payload = {
+          ...baseHeader,
+          Assets: assetsPayload,
+        };
+
         await axios.post(SCHEDULE_BASE, payload);
-        message.success("Tạo lịch thành công.");
+
+        message.success(
+          `Tạo kế hoạch bảo trì thành công cho ${assetIds.length} tài sản.`
+        );
       }
+
       setIsModalOpen(false);
       setEditing(null);
       form.resetFields();
@@ -204,7 +321,7 @@ const MaintenanceSchedulePage = () => {
     } catch (e) {
       if (e?.errorFields) return; // lỗi validate của Ant
       console.error(e);
-      message.error("Lưu lịch thất bại.");
+      message.error("Lưu kế hoạch bảo trì thất bại.");
     } finally {
       setSaving(false);
     }
@@ -213,6 +330,7 @@ const MaintenanceSchedulePage = () => {
   const handleCancelSchedule = async (record) => {
     await axios.patch(`${SCHEDULE_BASE}/${record.ScheduleID}`, { Cancel: true });
   };
+
   const handleGenerateWO = async (record) => {
     await axios.post(`${SCHEDULE_BASE}/${record.ScheduleID}/generate-wo`);
   };
@@ -220,14 +338,14 @@ const MaintenanceSchedulePage = () => {
   // ===== HELPERS (confirm wrappers) =====
   const confirmGenerate = (record) => {
     confirm({
-      title: "Tạo Work Order cho kỳ hiện tại?",
+      title: "Tạo Work Order cho tất cả tài sản trong kế hoạch này?",
       icon: <ExclamationCircleOutlined />,
       okText: "Tạo",
       cancelText: "Hủy",
       async onOk() {
         try {
           await handleGenerateWO(record);
-          message.success("Đã tạo Work Order.");
+          message.success("Đã tạo Work Order cho kế hoạch.");
         } catch (e) {
           console.error(e);
           message.error("Tạo Work Order thất bại.");
@@ -238,55 +356,55 @@ const MaintenanceSchedulePage = () => {
 
   const confirmCancel = (record) => {
     confirm({
-      title: "Hủy lịch bảo trì này?",
+      title: "Hủy kế hoạch bảo trì này?",
       icon: <ExclamationCircleOutlined />,
-      okText: "Hủy lịch",
+      okText: "Hủy kế hoạch",
       okButtonProps: { danger: true },
       cancelText: "Đóng",
       async onOk() {
         try {
           await handleCancelSchedule(record);
-          message.success("Đã hủy lịch.");
+          message.success("Đã hủy kế hoạch.");
           if (selected?.ScheduleID === record.ScheduleID) setSelected(null);
           await fetchSchedules();
         } catch (e) {
           console.error(e);
-          message.error("Hủy lịch thất bại.");
+          message.error("Hủy kế hoạch thất bại.");
         }
       },
     });
   };
 
-  // ===== DERIVED =====
+  // ===== DERIVED (FILTER TABLE) =====
   const filtered = useMemo(() => {
     if (!search?.trim()) return rows;
     const s = search.trim().toLowerCase();
     return rows.filter((r) => {
       const id = String(r.ScheduleID || "").toLowerCase();
-      const asset = String(r.AssetID || "").toLowerCase();
+      const title = String(r.Title || "").toLowerCase();
       const st = String(r.Status || "").toLowerCase();
       const pr = String(r.Priority || "").toLowerCase();
-      const ass = String(r.AssignedToUserID ?? "").toLowerCase();
       const note = String(r.Notes || "").toLowerCase();
-      return id.includes(s) || asset.includes(s) || st.includes(s) || pr.includes(s) || ass.includes(s) || note.includes(s);
+      return (
+        id.includes(s) ||
+        title.includes(s) ||
+        st.includes(s) ||
+        pr.includes(s) ||
+        note.includes(s)
+      );
     });
   }, [rows, search]);
 
-  const renderAsset = (assetId) => {
-    const found = assets.find((o) => String(o.value) === String(assetId));
-    return found ? found.label : assetId || "—";
-  };
-  const renderUser = (uid) => (uid ? userMap[Number(uid)] || uid : "—");
-
-  const canGenerateWO = (r) => ["ACTIVE", "OVERDUE"].includes(String(r.Status).toUpperCase());
-  const canCancel = (r) => !["CANCELLED", "COMPLETED"].includes(String(r.Status).toUpperCase());
+  const canGenerateWO = (r) =>
+    ["ACTIVE", "OVERDUE"].includes(String(r.Status).toUpperCase());
+  const canCancel = (r) =>
+    !["CANCELLED", "COMPLETED"].includes(String(r.Status).toUpperCase());
 
   // ===== Actions (improved) =====
   const renderRowActions = (record) => {
-    // Quick action chọn thông minh
     const quickIsGenerate = canGenerateWO(record);
     const quickButton = quickIsGenerate ? (
-      <Tooltip title="Tạo Work Order cho kỳ hiện tại">
+      <Tooltip title="Tạo Work Order cho tất cả tài sản trong kế hoạch">
         <Button
           type="primary"
           icon={<CalendarOutlined />}
@@ -325,7 +443,7 @@ const MaintenanceSchedulePage = () => {
       {
         key: "edit",
         icon: <EditOutlined />,
-        label: "Sửa",
+        label: "Sửa header",
         disabled: record.Status === "CANCELLED",
         onClick: () => openEdit(record),
       },
@@ -342,7 +460,7 @@ const MaintenanceSchedulePage = () => {
       {
         key: "cancel",
         icon: <StopOutlined />,
-        label: "Hủy lịch",
+        label: "Hủy kế hoạch",
         danger: true,
         disabled: !canCancel(record),
         onClick: () => confirmCancel(record),
@@ -350,11 +468,7 @@ const MaintenanceSchedulePage = () => {
     ].filter(Boolean);
 
     return (
-      <Space
-        onClick={(e) => e.stopPropagation()}
-        size={6}
-        wrap
-      >
+      <Space onClick={(e) => e.stopPropagation()} size={6} wrap>
         {quickButton}
         <Dropdown
           trigger={["click"]}
@@ -367,7 +481,9 @@ const MaintenanceSchedulePage = () => {
             },
           }}
         >
-          <Button size="small" icon={<MoreOutlined />}>More</Button>
+          <Button size="small" icon={<MoreOutlined />}>
+            More
+          </Button>
         </Dropdown>
       </Space>
     );
@@ -375,8 +491,20 @@ const MaintenanceSchedulePage = () => {
 
   // ===== COLUMNS =====
   const columns = [
-    { title: "ID", dataIndex: "ScheduleID", key: "ScheduleID", width: 90, fixed: "left" },
-    { title: "Asset", dataIndex: "AssetID", key: "AssetID", ellipsis: true, render: renderAsset, width: 260 },
+    {
+      title: "ID",
+      dataIndex: "ScheduleID",
+      key: "ScheduleID",
+      width: 90,
+      fixed: "left",
+    },
+    {
+      title: "Tiêu đề",
+      dataIndex: "Title",
+      key: "Title",
+      ellipsis: true,
+      width: 260,
+    },
     {
       title: "Status / Priority",
       key: "sp",
@@ -388,25 +516,45 @@ const MaintenanceSchedulePage = () => {
         </Space>
       ),
     },
-    { title: "Next", dataIndex: "NextMaintenanceDate", key: "NextMaintenanceDate", width: 120, render: fmtDate },
-    { title: "Last", dataIndex: "LastMaintenanceDate", key: "LastMaintenanceDate", width: 120, render: fmtDate },
-    { title: "Assignee", dataIndex: "AssignedToUserID", key: "AssignedToUserID", width: 220, render: renderUser },
-    { title: "Reminder(d)", dataIndex: "ReminderDaysBefore", key: "ReminderDaysBefore", width: 120 },
     {
-      title: "Window",
-      key: "Window",
-      width: 160,
-      render: (_, r) => (
-        <span>
-          {fmtTime(r.WindowStart)} - {fmtTime(r.WindowEnd)}
-        </span>
-      ),
+      title: "Next",
+      dataIndex: "NextMaintenanceDate",
+      key: "NextMaintenanceDate",
+      width: 120,
+      render: fmtDate,
+    },
+    {
+      title: "Interval (tháng)",
+      dataIndex: "IntervalMonths",
+      key: "IntervalMonths",
+      width: 120,
+    },
+    {
+      title: "Số tài sản",
+      dataIndex: "AssetCount",
+      key: "AssetCount",
+      width: 120,
+      render: (v) => v ?? 0,
+    },
+    {
+      title: "Asset ACTIVE",
+      dataIndex: "ActiveAssets",
+      key: "ActiveAssets",
+      width: 130,
+      render: (v) => v ?? 0,
+    },
+    {
+      title: "Auto WO",
+      dataIndex: "AutoCreateWorkOrder",
+      key: "AutoCreateWorkOrder",
+      width: 100,
+      render: (v) => String(v ?? true),
     },
     {
       title: "Actions",
       key: "actions",
       fixed: "right",
-      width: 150,
+      width: 170,
       render: (_, record) => renderRowActions(record),
     },
   ];
@@ -423,12 +571,12 @@ const MaintenanceSchedulePage = () => {
   return (
     <div className="p-4">
       <Card
-        title="Lịch bảo trì định kỳ"
+        title="Kế hoạch bảo trì định kỳ"
         extra={
           <Space>
             <Input
               prefix={<SearchOutlined />}
-              placeholder="Tìm theo ID/Asset/Status/Priority/Assignee/Notes"
+              placeholder="Tìm theo ID / tiêu đề / trạng thái / ưu tiên / ghi chú"
               allowClear
               style={{ width: 360 }}
               value={search}
@@ -438,7 +586,7 @@ const MaintenanceSchedulePage = () => {
               Làm mới
             </Button>
             <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-              Tạo lịch
+              Tạo kế hoạch
             </Button>
           </Space>
         }
@@ -453,7 +601,7 @@ const MaintenanceSchedulePage = () => {
           bordered
           size="middle"
           sticky
-          scroll={{ x: 1200 }}
+          scroll={{ x: 1100 }}
           onRow={(record) => ({
             onClick: () => setSelected(record),
           })}
@@ -462,33 +610,55 @@ const MaintenanceSchedulePage = () => {
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col xs={36} lg={24}>
-          <Card title="Thông tin lịch" size="small">
+          <Card title="Thông tin kế hoạch" size="small">
             {selected ? (
               <Descriptions bordered size="small" column={1}>
-                <Descriptions.Item label="ScheduleID">{selected.ScheduleID}</Descriptions.Item>
-                <Descriptions.Item label="Asset">{renderAsset(selected.AssetID)}</Descriptions.Item>
-                <Descriptions.Item label="Assignee">{renderUser(selected.AssignedToUserID)}</Descriptions.Item>
-                <Descriptions.Item label="Trạng thái">{statusTag(selected.Status)}</Descriptions.Item>
-                <Descriptions.Item label="Mức ưu tiên">{priorityTag(selected.Priority)}</Descriptions.Item>
-                <Descriptions.Item label="Interval (tháng)">{selected.IntervalMonths ?? "—"}</Descriptions.Item>
-                <Descriptions.Item label="NextMaintenanceDate">{fmtDate(selected.NextMaintenanceDate)}</Descriptions.Item>
-                <Descriptions.Item label="LastMaintenanceDate">{fmtDate(selected.LastMaintenanceDate)}</Descriptions.Item>
-                <Descriptions.Item label="Window">
-                  {fmtTime(selected.WindowStart)} - {fmtTime(selected.WindowEnd)}
+                <Descriptions.Item label="ScheduleID">
+                  {selected.ScheduleID}
                 </Descriptions.Item>
-                <Descriptions.Item label="EstimatedHours">{selected.EstimatedHours ?? "—"}</Descriptions.Item>
-                <Descriptions.Item label="ReminderDaysBefore">{selected.ReminderDaysBefore ?? 7}</Descriptions.Item>
-                <Descriptions.Item label="AutoCreateWO">{String(selected.AutoCreateWorkOrder ?? true)}</Descriptions.Item>
-                <Descriptions.Item label="Notes">{selected.Notes || "—"}</Descriptions.Item>
+                <Descriptions.Item label="Tiêu đề">
+                  {selected.Title || "—"}
+                </Descriptions.Item>
+                <Descriptions.Item label="Trạng thái">
+                  {statusTag(selected.Status)}
+                </Descriptions.Item>
+                <Descriptions.Item label="Mức ưu tiên">
+                  {priorityTag(selected.Priority)}
+                </Descriptions.Item>
+                <Descriptions.Item label="Interval (tháng)">
+                  {selected.IntervalMonths ?? "—"}
+                </Descriptions.Item>
+                <Descriptions.Item label="NextMaintenanceDate">
+                  {fmtDate(selected.NextMaintenanceDate)}
+                </Descriptions.Item>
+                <Descriptions.Item label="Số tài sản">
+                  {selected.AssetCount ?? 0}
+                </Descriptions.Item>
+                <Descriptions.Item label="Asset ACTIVE">
+                  {selected.ActiveAssets ?? 0}
+                </Descriptions.Item>
+                <Descriptions.Item label="AutoCreateWO">
+                  {String(selected.AutoCreateWorkOrder ?? true)}
+                </Descriptions.Item>
+                <Descriptions.Item label="CreatedByUserID">
+                  {selected.CreatedByUserID || "—"}
+                </Descriptions.Item>
+                <Descriptions.Item label="Notes">
+                  {selected.Notes || "—"}
+                </Descriptions.Item>
                 <Descriptions.Item label="CreatedAt">
-                  {selected.CreatedAt ? String(selected.CreatedAt).replace("T", " ").slice(0, 19) : "—"}
+                  {selected.CreatedAt
+                    ? String(selected.CreatedAt).replace("T", " ").slice(0, 19)
+                    : "—"}
                 </Descriptions.Item>
                 <Descriptions.Item label="UpdatedAt">
-                  {selected.UpdatedAt ? String(selected.UpdatedAt).replace("T", " ").slice(0, 19) : "—"}
+                  {selected.UpdatedAt
+                    ? String(selected.UpdatedAt).replace("T", " ").slice(0, 19)
+                    : "—"}
                 </Descriptions.Item>
               </Descriptions>
             ) : (
-              <Empty description="Chọn một lịch ở bảng để xem chi tiết" />
+              <Empty description="Chọn một kế hoạch ở bảng để xem chi tiết" />
             )}
           </Card>
         </Col>
@@ -496,19 +666,22 @@ const MaintenanceSchedulePage = () => {
 
       {/* ===== MODAL CREATE/EDIT ===== */}
       <Modal
-        title={editing ? "Sửa lịch bảo trì" : "Tạo lịch bảo trì"}
+        title={editing ? "Sửa kế hoạch bảo trì" : "Tạo kế hoạch bảo trì"}
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
           setEditing(null);
           form.resetFields();
+          setAssetFilterDept(undefined);
+          setAssetFilterHolder(undefined);
+          setAssetKw("");
         }}
         onOk={() => form.submit()}
         okText="Lưu"
         cancelText="Hủy"
         confirmLoading={saving}
         destroyOnClose
-        width={720}
+        width={780}
       >
         <Form
           form={form}
@@ -521,33 +694,21 @@ const MaintenanceSchedulePage = () => {
           }}
         >
           <Form.Item
-            label="Asset"
-            name="AssetID"
-            rules={[{ required: true, message: "Chọn Asset" }]}
+            label="Tiêu đề kế hoạch"
+            name="Title"
+            rules={[{ required: true, message: "Nhập tiêu đề kế hoạch" }]}
           >
-            <Select showSearch allowClear placeholder="Chọn thiết bị" optionFilterProp="children">
-              {assets.map((a) => (
-                <Option key={a.value} value={a.value}>
-                  {a.label}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
-
-          <Form.Item label="Người phụ trách (AssignedToUserID)" name="AssignedToUserID">
-            <Select showSearch allowClear placeholder="Chọn người phụ trách" optionFilterProp="children">
-              {employees.map((u) => (
-                <Option key={u.value} value={u.value}>
-                  {u.label}
-                </Option>
-              ))}
-            </Select>
+            <Input placeholder="VD: Bảo trì quý I phòng IT" />
           </Form.Item>
 
           <Row gutter={8}>
             <Col span={8}>
               <Form.Item label="IntervalMonths" name="IntervalMonths">
-                <InputNumber min={0} style={{ width: "100%" }} placeholder="6" />
+                <InputNumber
+                  min={0}
+                  style={{ width: "100%" }}
+                  placeholder="6"
+                />
               </Form.Item>
             </Col>
             <Col span={8}>
@@ -560,32 +721,6 @@ const MaintenanceSchedulePage = () => {
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item label="ReminderDaysBefore" name="ReminderDaysBefore">
-                <InputNumber min={0} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Row gutter={8}>
-            <Col span={12}>
-              <Form.Item label="WindowStart" name="WindowStart">
-                <TimePicker style={{ width: "100%" }} format="HH:mm:ss" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item label="WindowEnd" name="WindowEnd">
-                <TimePicker style={{ width: "100%" }} format="HH:mm:ss" />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Row gutter={8}>
-            <Col span={12}>
-              <Form.Item label="EstimatedHours" name="EstimatedHours">
-                <InputNumber min={0} step={0.5} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
               <Form.Item label="Priority" name="Priority">
                 <Select>
                   <Option value="LOW">LOW</Option>
@@ -596,21 +731,174 @@ const MaintenanceSchedulePage = () => {
             </Col>
           </Row>
 
-          <Row gutter={8}>
-            <Col span={12}>
+          {!editing && (
+            <>
+              {/* Lọc asset giống StocktakeWizard */}
+              <Row gutter={8}>
+                <Col span={8}>
+                  <Form.Item label="Lọc theo phòng đang giữ">
+                    <Select
+                      allowClear
+                      showSearch
+                      placeholder="Chọn phòng ban"
+                      value={assetFilterDept}
+                      onChange={setAssetFilterDept}
+                      style={{ width: "100%" }}
+                      options={departments}
+                      optionFilterProp="label"
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item label="Lọc theo người đang giữ">
+                    <Select
+                      allowClear
+                      showSearch
+                      placeholder="Chọn người đang giữ"
+                      value={assetFilterHolder}
+                      onChange={setAssetFilterHolder}
+                      style={{ width: "100%" }}
+                      options={employees}
+                      optionFilterProp="label"
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item label="Tìm tài sản">
+                    <Input
+                      allowClear
+                      placeholder="Tìm theo tên/mã/serial…"
+                      value={assetKw}
+                      onChange={(e) => setAssetKw(e.target.value)}
+                    />
+                    <div
+                      style={{
+                        marginTop: 4,
+                        fontSize: 12,
+                        color: "#999",
+                      }}
+                    >
+                      Hiển thị {assetSelectOptions.length}/{assets.length} tài sản
+                    </div>
+                  </Form.Item>
+                </Col>
+              </Row>
+
+              {/* Chọn nhiều Asset */}
               <Form.Item
-                label="AutoCreateWorkOrder"
-                name="AutoCreateWorkOrder"
-                valuePropName="checked"
+                label="Tài sản trong kế hoạch"
+                name="AssetIDs"
+                rules={[
+                  {
+                    required: true,
+                    message: "Chọn ít nhất 1 tài sản",
+                  },
+                ]}
               >
-                <Switch />
+                <Select
+                  mode="multiple"
+                  showSearch
+                  allowClear
+                  placeholder="Chọn thiết bị"
+                  optionFilterProp="label"
+                  options={assetSelectOptions}
+                  maxTagCount="responsive"
+                />
               </Form.Item>
-            </Col>
-          </Row>
+            </>
+          )}
+
+          <Form.Item
+            label="Người phụ trách (AssignedToUserID – áp dụng chung cho tất cả asset)"
+            name="AssignedToUserID"
+          >
+            <Select
+              showSearch
+              allowClear
+              placeholder="Chọn người phụ trách"
+              optionFilterProp="children"
+            >
+              {employees.map((u) => (
+                <Option key={u.value} value={u.value}>
+                  {u.label}
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          {!editing && (
+            <>
+              <Row gutter={8}>
+                <Col span={8}>
+                  <Form.Item
+                    label="ReminderDaysBefore"
+                    name="ReminderDaysBefore"
+                  >
+                    <InputNumber min={0} style={{ width: "100%" }} />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item label="WindowStart" name="WindowStart">
+                    <TimePicker
+                      style={{ width: "100%" }}
+                      format="HH:mm:ss"
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item label="WindowEnd" name="WindowEnd">
+                    <TimePicker
+                      style={{ width: "100%" }}
+                      format="HH:mm:ss"
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+
+              <Row gutter={8}>
+                <Col span={12}>
+                  <Form.Item label="EstimatedHours" name="EstimatedHours">
+                    <InputNumber
+                      min={0}
+                      step={0.5}
+                      style={{ width: "100%" }}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    label="AutoCreateWorkOrder"
+                    name="AutoCreateWorkOrder"
+                    valuePropName="checked"
+                  >
+                    <Switch />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </>
+          )}
+
+          {editing && (
+            <Form.Item
+              label="AutoCreateWorkOrder"
+              name="AutoCreateWorkOrder"
+              valuePropName="checked"
+            >
+              <Switch />
+            </Form.Item>
+          )}
 
           <Form.Item label="Notes" name="Notes">
             <Input.TextArea rows={3} placeholder="Ghi chú..." />
           </Form.Item>
+
+          {editing && (
+            <div style={{ fontSize: 12, color: "#999" }}>
+              * Màn hình này chỉ chỉnh sửa thông tin kế hoạch (header). Danh
+              sách tài sản thuộc kế hoạch chỉnh ở màn hình chi tiết riêng nếu
+              bạn xây thêm API.
+            </div>
+          )}
         </Form>
       </Modal>
     </div>

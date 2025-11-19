@@ -1,111 +1,201 @@
 // src/pages/RequestCreatePage.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Card, Form, Input, InputNumber, Select, Button, Space, Tag, message, Tooltip,
-  Typography, Divider, Alert, Spin, Badge, Progress, List
+  Card,
+  Form,
+  Input,
+  Select,
+  Button,
+  Space,
+  Tag,
+  message,
+  Tooltip,
+  Typography,
+  Divider,
+  Alert,
+  Table,
+  Radio,
 } from "antd";
 import {
-  SendOutlined, RedoOutlined, ReloadOutlined, InfoCircleOutlined,
-  DatabaseOutlined, ToolOutlined, DeleteOutlined, SafetyOutlined, QrcodeOutlined
+  SendOutlined,
+  RedoOutlined,
+  ReloadOutlined,
+  InfoCircleOutlined,
+  DatabaseOutlined,
+  ToolOutlined,
+  DeleteOutlined,
+  SafetyOutlined,
+  SwapOutlined,
 } from "@ant-design/icons";
 import axios from "axios";
 
 const { Title, Text } = Typography;
 
 const API_URL = import.meta.env.VITE_BACKEND_URL;
-const CREATE_BASE       = `${API_URL}/api/request/createrequest`;
-const ASSET_LIST_BASE   = `${API_URL}/api/asset`;
-const ASSET_DETAIL_BASE = `${API_URL}/api/asset/assetdetail`; // + /:id
-const USERS_API         = `${API_URL}/api/getuserinfo`;
-const DEPT_API          = `${API_URL}/api/getdepartment`;
+const CREATE_BASE = `${API_URL}/api/request/createrequest`;
+const ASSET_LIST_BASE = `${API_URL}/api/asset`;
+const USERS_API = `${API_URL}/api/getuserinfo`;
+const DEPT_API = `${API_URL}/api/getdepartment`;
+
+// 🔹 Department ID của kho
+const WAREHOUSE_DEPT_ID = 5;
+
+// 🔹 Mode của TRANSFER
+const TRANSFER_MODE = {
+  WAREHOUSE: "WAREHOUSE", // chuyển về kho
+  USER: "USER", // chuyển người ↔ người
+};
 
 const REQUEST_TYPES = [
-  { value: "ALLOCATION",  label: (<><DatabaseOutlined /> Allocation (Cấp phát)</>) },
-  { value: "MAINTENANCE", label: (<><ToolOutlined /> Maintenance (Bảo trì)</>) },
-  { value: "DISPOSAL",    label: (<><DeleteOutlined /> Disposal (Thanh lý)</>) },
-  { value: "WARRANTY",    label: (<><SafetyOutlined /> Warranty (Bảo hành)</>) },
+  {
+    value: "ALLOCATION",
+    label: (
+      <>
+        <DatabaseOutlined /> Allocation (Cấp phát)
+      </>
+    ),
+  },
+  {
+    value: "MAINTENANCE",
+    label: (
+      <>
+        <ToolOutlined /> Maintenance (Bảo trì)
+      </>
+    ),
+  },
+  {
+    value: "DISPOSAL",
+    label: (
+      <>
+        <DeleteOutlined /> Disposal (Thanh lý)
+      </>
+    ),
+  },
+  {
+    value: "WARRANTY",
+    label: (
+      <>
+        <SafetyOutlined /> Warranty (Bảo hành)
+      </>
+    ),
+  },
+  {
+    value: "TRANSFER",
+    label: (
+      <>
+        <SwapOutlined /> Transfer (Chuyển giao)
+      </>
+    ),
+  },
 ];
 
 const getToken = () => localStorage.getItem("token") || "";
 const withAuth = () => ({ headers: { Authorization: `Bearer ${getToken()}` } });
 
-const normalizeUser = (u) => !u ? null : ({
-  UserID: u.UserID ?? u.userID ?? u.userId ?? u.id ?? null,
-  DepartmentID: u.DepartmentID ?? u.departmentID ?? u.departmentId ?? u.deptId ?? null,
-  Role: String(u.Role ?? u.role ?? "").toUpperCase() || null,
-  FullName: u.FullName ?? u.fullname ?? u.fullName ?? u.name ?? "",
-  Email: u.Email ?? u.email ?? "",
-});
+const normalizeUser = (u) =>
+  !u
+    ? null
+    : {
+        UserID: u.UserID ?? u.userID ?? u.userId ?? u.id ?? null,
+        DepartmentID:
+          u.DepartmentID ?? u.departmentID ?? u.departmentId ?? u.deptId ?? null,
+        Role: String(u.Role ?? u.role ?? "").toUpperCase() || null,
+        FullName: u.FullName ?? u.fullname ?? u.fullName ?? u.name ?? "",
+        Email: u.Email ?? u.email ?? "",
+      };
 
-// ===== Asset helpers
-const STATUS = { AVAILABLE:1, ALLOCATED:2, MAINTENANCE_OUT:3, WARRANTY_OUT:4, DISPOSED:5 };
+// ===== Asset helpers =====
+const STATUS = {
+  AVAILABLE: 1,
+  ALLOCATED: 2,
+  MAINTENANCE_OUT: 3,
+  WARRANTY_OUT: 4,
+  DISPOSED: 5,
+  IN_USE: 6,
+};
+
 const STATUS_LABEL = {
-  [STATUS.AVAILABLE]:"AVAILABLE",
-  [STATUS.ALLOCATED]:"ALLOCATED",
-  [STATUS.MAINTENANCE_OUT]:"MAINTENANCE_OUT",
-  [STATUS.WARRANTY_OUT]:"WARRANTY_OUT",
-  [STATUS.DISPOSED]:"DISPOSED",
+  [STATUS.AVAILABLE]: "AVAILABLE",
+  [STATUS.ALLOCATED]: "ALLOCATED",
+  [STATUS.MAINTENANCE_OUT]: "MAINTENANCE_OUT",
+  [STATUS.WARRANTY_OUT]: "WARRANTY_OUT",
+  [STATUS.DISPOSED]: "DISPOSED",
+  [STATUS.IN_USE]: "IN_USE",
 };
+
 const STATUS_COLOR = {
-  [STATUS.AVAILABLE]:"green",
-  [STATUS.ALLOCATED]:"blue",
-  [STATUS.MAINTENANCE_OUT]:"orange",
-  [STATUS.WARRANTY_OUT]:"gold",
-  [STATUS.DISPOSED]:"red",
+  [STATUS.AVAILABLE]: "green",
+  [STATUS.ALLOCATED]: "blue",
+  [STATUS.MAINTENANCE_OUT]: "orange",
+  [STATUS.WARRANTY_OUT]: "gold",
+  [STATUS.DISPOSED]: "red",
+  [STATUS.IN_USE]: "cyan",
 };
 
-const fmtDate  = (v) => (v ? String(v).replace("T"," ").slice(0,19) : "-");
-const fmtMoney = (n) => (n == null ? "-" : Number(n).toLocaleString("vi-VN"));
-const isWarrantyActive = (start, end) => {
-  if (!start || !end) return false;
-  const now = new Date();
-  return now >= new Date(start) && now <= new Date(end);
+// 🔹 Kiểm tra còn hạn bảo hành hay không (dựa vào WarrantyEndDate)
+const isInWarranty = (asset) => {
+  if (!asset) return false;
+  const endRaw =
+    asset.WarrantyEndDate ??
+    asset.warrantyEndDate ??
+    asset.warranty_end_date ??
+    null;
+  if (!endRaw) return false;
+
+  const endTime = new Date(endRaw).getTime();
+  if (Number.isNaN(endTime)) return false;
+
+  const now = Date.now();
+  return endTime >= now;
 };
 
-const allowedByTypeLite = (type, status) => {
-  const s = Number(status);
-  switch (type) {
-    case "ALLOCATION":  return s === STATUS.AVAILABLE;
-    case "MAINTENANCE": return ![STATUS.DISPOSED, STATUS.MAINTENANCE_OUT, STATUS.WARRANTY_OUT].includes(s);
-    case "WARRANTY":    return s !== STATUS.DISPOSED;
-    case "DISPOSAL":    return ![STATUS.DISPOSED, STATUS.ALLOCATED, STATUS.MAINTENANCE_OUT, STATUS.WARRANTY_OUT].includes(s);
-    default:            return true;
-  }
-};
+// 🔹 rule theo Type + Asset (full object)
+//   ⇒ để WARRRANTY chỉ cho chọn thiết bị còn hạn bảo hành
+const allowedByTypeLite = (type, asset) => {
+  if (!asset) return false;
+  const s = Number(asset.Status);
 
-// strict reason (string nếu vi phạm; null nếu hợp lệ)
-const disallowReasonByType = (type, status, assetDetailAsset) => {
-  const s = Number(status);
-  const hasOpen = !!(assetDetailAsset?.HasOpenRequest || (assetDetailAsset?.OpenRequestCount > 0));
-  if (hasOpen) return "Tài sản đang có yêu cầu mở khác.";
   switch (type) {
     case "ALLOCATION":
-      if (s !== STATUS.AVAILABLE) return "Cấp phát chỉ áp dụng cho thiết bị AVAILABLE.";
-      return null;
+      return s === STATUS.AVAILABLE;
+
     case "MAINTENANCE":
-      if ([STATUS.DISPOSED, STATUS.MAINTENANCE_OUT, STATUS.WARRANTY_OUT].includes(s)) return "Thiết bị không hợp lệ cho bảo trì.";
-      if (isWarrantyActive(assetDetailAsset?.WarrantyStartDate, assetDetailAsset?.WarrantyEndDate)) return "Thiết bị còn bảo hành — hãy tạo WARRANTY.";
-      return null;
+      return ![
+        STATUS.DISPOSED,
+        STATUS.MAINTENANCE_OUT,
+        STATUS.WARRANTY_OUT,
+      ].includes(s);
+
     case "WARRANTY":
-      if ([STATUS.DISPOSED, STATUS.WARRANTY_OUT].includes(s)) return "Thiết bị không hợp lệ cho bảo hành.";
-      if (!isWarrantyActive(assetDetailAsset?.WarrantyStartDate, assetDetailAsset?.WarrantyEndDate)) return "Thiết bị hết/không có bảo hành.";
-      return null;
+      // chỉ cho chọn asset KHÔNG DISPOSED và đang còn hạn bảo hành
+      return s !== STATUS.DISPOSED && isInWarranty(asset);
+
     case "DISPOSAL":
-      if (s === STATUS.DISPOSED) return "Thiết bị đã thanh lý.";
-      if ([STATUS.ALLOCATED, STATUS.MAINTENANCE_OUT, STATUS.WARRANTY_OUT].includes(s)) return "Cần thu hồi/hoàn tất trước khi thanh lý.";
-      return null;
+      return ![
+        STATUS.DISPOSED,
+        STATUS.ALLOCATED,
+        STATUS.MAINTENANCE_OUT,
+        STATUS.WARRANTY_OUT,
+      ].includes(s);
+
+    // TRANSFER: cho chuyển những cái đang dùng (ALLOCATED / IN_USE)
+    case "TRANSFER":
+      return [STATUS.ALLOCATED, STATUS.IN_USE,STATUS.WARRANTY_OUT,STATUS.MAINTENANCE_OUT].includes(s);
+
     default:
-      return "Loại yêu cầu không hỗ trợ.";
+      return true;
   }
 };
 
 const extractAssets = (resp) => {
   const d = resp?.data;
   if (Array.isArray(d?.assets)) return d.assets;
-  if (Array.isArray(d?.data))   return d.data;
-  if (Array.isArray(d))         return d;
+  if (Array.isArray(d?.data)) return d.data;
+  if (Array.isArray(d)) return d;
   return [];
 };
+
+// 🔹 Chuẩn hoá asset, giữ thêm WarrantyStartDate, WarrantyEndDate
 const normListItem = (a) => ({
   ID: a.ID ?? a.id ?? a.AssetID ?? a.assetId,
   Name: a.Name ?? a.name ?? "",
@@ -113,47 +203,11 @@ const normListItem = (a) => ({
   AssetCode: a.AssetCode ?? a.assetCode ?? "",
   SerialNumber: a.SerialNumber ?? a.serialNumber ?? "",
   Status: Number(a.Status ?? a.status ?? 0),
-  Quantity: Number(a.Quantity ?? a.quantity ?? 1),
+  WarrantyStartDate:
+    a.WarrantyStartDate ?? a.warrantyStartDate ?? a.warranty_start_date ?? null,
+  WarrantyEndDate:
+    a.WarrantyEndDate ?? a.warrantyEndDate ?? a.warranty_end_date ?? null,
 });
-const normDetail = (resp) => {
-  const root = resp?.data?.data || resp?.data || resp || {};
-  const asset = root.asset || {};
-  const attrs = Array.isArray(root.attributes) ? root.attributes : [];
-  return {
-    asset: {
-      ID: asset.ID, ManageCode: asset.ManageCode, AssetCode: asset.AssetCode, Name: asset.Name,
-      SerialNumber: asset.SerialNumber, CategoryID: asset.CategoryID, CategoryName: asset.CategoryName,
-      ItemMasterID: asset.ItemMasterID, ItemMasterName: asset.ItemMasterName,
-      VendorID: asset.VendorID, VendorName: asset.VendorName,
-      PurchaseDate: asset.PurchaseDate, PurchasePrice: asset.PurchasePrice, PurchaseId: asset.PurchaseId,
-      WarrantyStartDate: asset.WarrantyStartDate, WarrantyEndDate: asset.WarrantyEndDate, WarrantyMonth: asset.WarrantyMonth,
-      EmployeeID: asset.EmployeeID, EmployeeName: asset.EmployeeName,
-      SectionID: asset.SectionID, DepartmentName: asset.DepartmentName,
-      Quantity: Number(asset.Quantity ?? 1),
-      QRCode: asset.QRCode,
-      Status: Number(asset.Status ?? 0),
-      HasOpenRequest: asset.HasOpenRequest ?? false,
-      OpenRequestCount: asset.OpenRequestCount ?? 0,
-    },
-    attributes: attrs.map(x => ({ ID:x.ID, AttributeID:x.AttributeID, Name:x.Name, Unit:x.Unit, Value:x.Value })),
-  };
-};
-const shortId = (id) => (id ? `${String(id).slice(0,8)}…${String(id).slice(-4)}` : "-");
-const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
-
-const warrantyInfo = (start, end) => {
-  if (!start || !end) return { active:false, percent:0, daysLeft:0, totalDays:0 };
-  const s = new Date(start), e = new Date(end), now = new Date();
-  const total = Math.max(1, Math.round((e - s) / (1000*60*60*24)));
-  const passed = Math.round((now - s) / (1000*60*60*24));
-  const left = Math.max(0, Math.round((e - now) / (1000*60*60*24)));
-  return {
-    active: now >= s && now <= e,
-    percent: clamp(Math.round((passed / total) * 100), 0, 100),
-    daysLeft: left,
-    totalDays: total,
-  };
-};
 
 export default function RequestCreatePage() {
   const [form] = Form.useForm();
@@ -162,8 +216,8 @@ export default function RequestCreatePage() {
 
   const [assets, setAssets] = useState([]);
   const [loadingAssets, setLoadingAssets] = useState(false);
-  const [assetDetail, setAssetDetail] = useState(null);
-  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [assetSearch, setAssetSearch] = useState("");
+  const [selectedAssetIds, setSelectedAssetIds] = useState([]);
 
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -172,39 +226,55 @@ export default function RequestCreatePage() {
   const [loadingDepts, setLoadingDepts] = useState(false);
 
   const type = Form.useWatch("type", form);
-  const selectedAssetId = Form.useWatch("AssetID", form);
+  const transferMode = Form.useWatch("transferMode", form);
   const watchTargetUserId = Form.useWatch("TargetUserID", form);
   const watchTargetDeptId = Form.useWatch("TargetDepartmentID", form);
 
+  // ===== current user =====
   useEffect(() => {
     try {
       const raw = localStorage.getItem("user");
-      if (raw && raw !== "undefined") setCurrentUser(normalizeUser(JSON.parse(raw)));
-    } catch {}
+      if (raw && raw !== "undefined")
+        setCurrentUser(normalizeUser(JSON.parse(raw)));
+    } catch {
+      // ignore
+    }
   }, []);
 
+  // ===== fetch assets =====
   const fetchAssets = async () => {
     setLoadingAssets(true);
     try {
       const resp = await axios.get(ASSET_LIST_BASE, withAuth());
-      setAssets(extractAssets(resp).map(normListItem).filter(x => x.ID));
+      setAssets(
+        extractAssets(resp)
+          .map(normListItem)
+          .filter((x) => x.ID)
+      );
     } catch (e) {
-      message.error(e?.response?.data?.message || "Không tải được danh sách thiết bị");
+      message.error(
+        e?.response?.data?.message || "Không tải được danh sách thiết bị"
+      );
     } finally {
       setLoadingAssets(false);
     }
   };
-  useEffect(() => { fetchAssets(); }, []);
+  useEffect(() => {
+    fetchAssets();
+  }, []);
 
+  // ===== fetch users =====
   const fetchUsers = async () => {
     setLoadingUsers(true);
     try {
       const resp = await axios.get(USERS_API, withAuth());
       const raw = Array.isArray(resp?.data?.data)
         ? resp.data.data
-        : Array.isArray(resp?.data) ? resp.data : [];
+        : Array.isArray(resp?.data)
+        ? resp.data
+        : [];
       setUsers(
-        raw.map(u => ({
+        raw.map((u) => ({
           value: Number(u.UserID),
           label: u.FullName || `User ${u.UserID}`,
           DepartmentID: u.DepartmentID ?? null,
@@ -212,181 +282,299 @@ export default function RequestCreatePage() {
         }))
       );
     } catch (e) {
-      message.error(e?.response?.data?.message || "Không tải được danh sách người dùng");
+      message.error(
+        e?.response?.data?.message || "Không tải được danh sách người dùng"
+      );
     } finally {
       setLoadingUsers(false);
     }
   };
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => {
+    fetchUsers();
+  }, []);
 
+  // ===== fetch departments =====
   const fetchDepartments = async () => {
     setLoadingDepts(true);
     try {
       const resp = await axios.get(DEPT_API, withAuth());
-      const arr = Array.isArray(resp?.data?.data) ? resp.data.data
-                : Array.isArray(resp?.data) ? resp.data : [];
-      setDepartments(arr.map(d => ({
-        value: Number(d.DepartmentID ?? d.id),
-        label: d.DepartmentName ?? d.name ?? `Dept ${d.DepartmentID}`,
-      })));
+      const arr = Array.isArray(resp?.data?.data)
+        ? resp.data.data
+        : Array.isArray(resp?.data)
+        ? resp.data
+        : [];
+      setDepartments(
+        arr.map((d) => ({
+          value: Number(d.DepartmentID ?? d.id),
+          label: d.DepartmentName ?? d.name ?? `Dept ${d.DepartmentID}`,
+        }))
+      );
     } catch (e) {
-      message.error(e?.response?.data?.message || "Không tải được danh sách phòng ban");
+      message.error(
+        e?.response?.data?.message || "Không tải được danh sách phòng ban"
+      );
     } finally {
       setLoadingDepts(false);
     }
   };
-  useEffect(() => { fetchDepartments(); }, []);
-
-  const fetchDetail = async (id) => {
-    if (!id) { setAssetDetail(null); return null; }
-    setLoadingDetail(true);
-    try {
-      const resp = await axios.get(`${ASSET_DETAIL_BASE}/${id}`, withAuth());
-      const detail = normDetail(resp);
-      setAssetDetail(detail);
-      return detail;
-    } catch (e) {
-      setAssetDetail(null);
-      message.warning("Không tải được chi tiết thiết bị.");
-      return null;
-    } finally {
-      setLoadingDetail(false);
-    }
-  };
-
-  // Chọn asset → fetch detail + strict validate + clamp qty
   useEffect(() => {
-    (async () => {
-      if (!selectedAssetId) { setAssetDetail(null); return; }
-      const detail = await fetchDetail(selectedAssetId);
-      if (!detail) return;
-      const lite = assets.find(x => x.ID === selectedAssetId);
-      const reason = disallowReasonByType(form.getFieldValue("type"), lite?.Status, detail.asset);
-      if (reason) {
-        form.setFieldValue("AssetID", undefined);
-        setAssetDetail(null);
-        message.error(reason);
-        return;
+    fetchDepartments();
+  }, []);
+
+  // 🔹 Khi type = TRANSFER + mode = WAREHOUSE → auto Dept = kho, clear User
+  useEffect(() => {
+    if (type === "TRANSFER" && transferMode === TRANSFER_MODE.WAREHOUSE) {
+      const currDept = form.getFieldValue("TargetDepartmentID");
+      if (Number(currDept) !== WAREHOUSE_DEPT_ID) {
+        form.setFieldValue("TargetDepartmentID", WAREHOUSE_DEPT_ID);
       }
-      // clamp số lượng cho MỌI loại
-      const mx = Number(detail.asset.Quantity || lite?.Quantity || 1) || 1;
-      const cur = Number(form.getFieldValue("Quantity") || 1);
-      form.setFieldValue("Quantity", clamp(cur, 1, mx));
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedAssetId]);
-
-  // Đổi loại → re-validate asset + clamp qty (cho MỌI loại)
-  useEffect(() => {
-    if (!type || !assetDetail?.asset?.ID) return;
-    const lite = assets.find(x => x.ID === assetDetail.asset.ID);
-    const reason = disallowReasonByType(type, lite?.Status, assetDetail.asset);
-    if (reason) {
-      form.setFieldValue("AssetID", undefined);
-      setAssetDetail(null);
-      message.info("Loại yêu cầu thay đổi: " + reason);
-      return;
+      form.setFieldValue("TargetUserID", null);
     }
-    const mx = Number(assetDetail.asset.Quantity || lite?.Quantity || 1) || 1;
-    const cur = Number(form.getFieldValue("Quantity") || 1);
-    form.setFieldValue("Quantity", clamp(cur, 1, mx));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type]);
+  }, [type, transferMode, form]);
 
-  // Khi chọn User → nếu chưa chọn Department thì tự set theo User
+  // Khi chọn User → auto set Dept nếu chưa chọn (trừ TRANSFER về kho)
   useEffect(() => {
     if (!watchTargetUserId) return;
-    const u = users.find(x => Number(x.value) === Number(watchTargetUserId));
-    if (!form.getFieldValue("TargetDepartmentID") && u?.DepartmentID != null) {
+    if (type === "TRANSFER" && transferMode === TRANSFER_MODE.WAREHOUSE) return;
+
+    const u = users.find((x) => Number(x.value) === Number(watchTargetUserId));
+    if (
+      !form.getFieldValue("TargetDepartmentID") &&
+      u?.DepartmentID != null
+    ) {
       form.setFieldValue("TargetDepartmentID", Number(u.DepartmentID));
     }
-  }, [watchTargetUserId, users]);  // eslint-disable-line
+  }, [watchTargetUserId, users, form, type, transferMode]);
 
-  // Filter user theo department (nếu đã chọn)
+  // 🔹 Dept options tuỳ theo loại phiếu + mode
+  const deptOptions = useMemo(() => {
+    if (!Array.isArray(departments)) return [];
+
+    // TRANSFER + về kho → chỉ cho chọn đúng kho
+    if (type === "TRANSFER" && transferMode === TRANSFER_MODE.WAREHOUSE) {
+      return departments.filter(
+        (d) => Number(d.value) === WAREHOUSE_DEPT_ID
+      );
+    }
+
+    // TRANSFER + USER → không cho chọn kho
+    if (type === "TRANSFER" && transferMode === TRANSFER_MODE.USER) {
+      return departments.filter(
+        (d) => Number(d.value) !== WAREHOUSE_DEPT_ID
+      );
+    }
+
+    // Các loại khác: cũng không cho chọn kho (theo yêu cầu)
+    return departments.filter((d) => Number(d.value) !== WAREHOUSE_DEPT_ID);
+  }, [departments, type, transferMode]);
+
+  // 🔹 Filter user theo Dept, nhưng nếu TRANSFER + về kho → không cần user
   const userOptions = useMemo(() => {
+    if (type === "TRANSFER" && transferMode === TRANSFER_MODE.WAREHOUSE) {
+      return [];
+    }
     const dept = Number(watchTargetDeptId || 0);
     const list = dept
-      ? users.filter(u => Number(u.DepartmentID || 0) === dept)
+      ? users.filter((u) => Number(u.DepartmentID || 0) === dept)
       : users;
     return list;
-  }, [users, watchTargetDeptId]);
+  }, [users, watchTargetDeptId, type, transferMode]);
 
-  // ===== options Select: Asset
-  const assetOptions = useMemo(() => {
-    return assets.map(a => {
-      const primary = a.ManageCode || a.AssetCode || a.SerialNumber || a.ID;
-      const sub = a.Name || "(Không tên)";
-      const display = `${primary}${a.SerialNumber ? ` • SN: ${a.SerialNumber}` : ""}`;
-      const label = (
-        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <div style={{ minWidth:0 }}>
-            <div style={{ fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", maxWidth:380 }}>
-              {primary}
+  // ===== filter assets theo search =====
+  const filteredAssets = useMemo(() => {
+    const s = assetSearch.toLowerCase().trim();
+    let list = assets;
+    if (s) {
+      list = list.filter((a) => {
+        const keys = [a.ManageCode, a.AssetCode, a.SerialNumber, a.Name]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return keys.includes(s);
+      });
+    }
+    return list;
+  }, [assets, assetSearch]);
+
+  // Khi đổi loại request → tự bỏ chọn những asset không hợp lệ theo rule mới
+  useEffect(() => {
+    if (!type) return;
+    setSelectedAssetIds((prev) =>
+      prev.filter((id) => {
+        const a = assets.find((x) => x.ID === id);
+        return a && allowedByTypeLite(type, a);
+      })
+    );
+  }, [type, assets]);
+
+  // ===== columns bảng Asset =====
+  const assetColumns = useMemo(
+    () => [
+      {
+        title: "Mã quản lý / Mã tài sản / Serial",
+        key: "code",
+        render: (a) => (
+          <div>
+            <div style={{ fontWeight: 600 }}>
+              {a.ManageCode || a.AssetCode || a.SerialNumber || a.ID}
             </div>
-            <div style={{ color:"#666", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", maxWidth:380 }}>
-              {sub}{a.SerialNumber ? ` • SN: ${a.SerialNumber}` : ""}
+            <div style={{ color: "#666", fontSize: 12 }}>
+              {a.SerialNumber ? `SN: ${a.SerialNumber}` : null}
             </div>
           </div>
-          <div style={{ marginLeft:"auto" }}>
-            <Tag color={STATUS_COLOR[a.Status] || "default"}>{STATUS_LABEL[a.Status] || a.Status}</Tag>
-          </div>
-        </div>
-      );
-      return {
-        value: a.ID,
-        label,
-        display,
-        disabled: !allowedByTypeLite(form.getFieldValue("type"), a.Status),
-        searchKey: `${a.ManageCode} ${a.AssetCode} ${a.SerialNumber} ${a.Name} ${STATUS_LABEL[a.Status] || a.Status}`.toLowerCase(),
-      };
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assets, type]);
-
-  const selectedFromList = useMemo(
-    () => assets.find(x => x.ID === selectedAssetId),
-    [assets, selectedAssetId]
+        ),
+      },
+      {
+        title: "Tên thiết bị",
+        dataIndex: "Name",
+        key: "Name",
+      },
+      {
+        title: "Trạng thái",
+        dataIndex: "Status",
+        key: "Status",
+        width: 140,
+        render: (st) => (
+          <Tag color={STATUS_COLOR[st] || "default"}>
+            {STATUS_LABEL[st] || st || "-"}
+          </Tag>
+        ),
+      },
+      // (Optional) Nếu muốn nhìn hạn bảo hành cho dễ debug, mở comment dưới:
+      // {
+      //   title: "Hạn bảo hành",
+      //   dataIndex: "WarrantyEndDate",
+      //   key: "WarrantyEndDate",
+      //   width: 150,
+      //   render: (v) => (v ? String(v).slice(0, 10) : "-"),
+      // },
+    ],
+    []
   );
 
-  // Max quantity cho MỌI loại
-  const maxQty =
-    Number(assetDetail?.asset?.Quantity || selectedFromList?.Quantity || 1) || 1;
-
+  // ===== SUBMIT REQUEST =====
   const onFinish = async (values) => {
-    if (!currentUser?.UserID) return message.error("Không xác định người tạo yêu cầu.");
+    if (!currentUser?.UserID)
+      return message.error("Không xác định người tạo yêu cầu.");
 
-    // đảm bảo có detail & validate lần cuối
-    let detail = assetDetail;
-    if (!detail || detail?.asset?.ID !== values.AssetID) {
-      detail = await fetchDetail(values.AssetID);
-      if (!detail) return;
+    if (!selectedAssetIds.length) {
+      message.error("Vui lòng chọn ít nhất một thiết bị.");
+      return;
     }
-    const lite = assets.find(x => x.ID === values.AssetID);
-    const reason = disallowReasonByType(values.type, lite?.Status, detail.asset);
-    if (reason) return message.error(reason);
 
-    // clamp Quantity theo tồn (áp dụng MỌI loại)
-    const mx = Number(detail.asset.Quantity || lite?.Quantity || 1) || 1;
-    const qty = clamp(Number(values.Quantity || 1), 1, mx);
+    const typeCode = values.type;
+    const mode = values.transferMode || TRANSFER_MODE.USER;
 
-    // *** BẮT BUỘC người nhận & phòng ban nhận cho MỌI loại ***
-    if (!values.TargetUserID)       return message.error("Chọn Người nhận (TargetUserID).");
-    if (values.TargetDepartmentID == null) return message.error("Chọn Phòng ban nhận (TargetDepartmentID).");
+    // Validate lý do chung theo loại
+    if (typeCode === "MAINTENANCE") {
+      if (
+        !values.IssueDescription ||
+        String(values.IssueDescription).trim().length < 5
+      ) {
+        message.error("Nhập mô tả sự cố (≥ 5 ký tự).");
+        return;
+      }
+    }
+    if (typeCode === "DISPOSAL") {
+      if (!values.Reason || String(values.Reason).trim().length < 3) {
+        message.error("Nhập lý do thanh lý (≥ 3 ký tự).");
+        return;
+      }
+    }
+    if (typeCode === "WARRANTY") {
+      if (
+        !values.WarrantyProvider ||
+        !String(values.WarrantyProvider).trim()
+      ) {
+        message.error("Nhập đơn vị bảo hành.");
+        return;
+      }
+    }
+
+    // 🔹 VALIDATE THEO MODE TRANSFER
+    if (typeCode === "TRANSFER") {
+      if (mode === TRANSFER_MODE.USER) {
+        // Chuyển sang người khác: phải có User + Dept != kho
+        if (!values.TargetUserID) {
+          message.error("Chuyển giao sang người khác phải chọn Người nhận.");
+          return;
+        }
+        if (Number(values.TargetDepartmentID) === WAREHOUSE_DEPT_ID) {
+          message.error(
+            "Chuyển giao sang người khác không được chọn phòng Kho."
+          );
+          return;
+        }
+      }
+
+      if (mode === TRANSFER_MODE.WAREHOUSE) {
+        // Chuyển về kho: Dept phải là kho, không cần User
+        if (Number(values.TargetDepartmentID) !== WAREHOUSE_DEPT_ID) {
+          message.error(
+            "Chuyển giao về kho phải chọn đúng phòng Kho."
+          );
+          return;
+        }
+        values.TargetUserID = null;
+      }
+    } else {
+      // Các loại khác: luôn yêu cầu User + Dept, và Dept không được là kho
+      if (!values.TargetUserID) {
+        message.error("Chọn Người nhận (TargetUserID).");
+        return;
+      }
+      if (values.TargetDepartmentID == null) {
+        message.error("Chọn Phòng ban nhận (TargetDepartmentID).");
+        return;
+      }
+      if (Number(values.TargetDepartmentID) === WAREHOUSE_DEPT_ID) {
+        message.error(
+          "Phòng Kho chỉ dùng cho phiếu Transfer. Loại yêu cầu hiện tại không được chuyển vào kho."
+        );
+        return;
+      }
+    }
+
+    const items = selectedAssetIds.map((id) => {
+      const base = {
+        AssetID: id,
+        Quantity: 1, // mỗi thiết bị = 1 đơn vị
+      };
+      if (typeCode === "MAINTENANCE")
+        base.IssueDescription = values.IssueDescription;
+      if (typeCode === "DISPOSAL") base.Reason = values.Reason;
+      if (typeCode === "WARRANTY")
+        base.WarrantyProvider = values.WarrantyProvider;
+      return base;
+    });
 
     const payload = {
-      typeCode: values.type,
+      typeCode,
       RequesterUserID: currentUser.UserID,
       Note: values.Note || null,
-      AssetID: values.AssetID,
-      Quantity: qty,
-      IssueDescription: values.IssueDescription,
-      Reason: values.Reason,
-      WarrantyProvider: values.WarrantyProvider,
-      // luôn gửi cho mọi loại:
-      TargetUserID: Number(values.TargetUserID),
       TargetDepartmentID: Number(values.TargetDepartmentID),
+      Items: items,
     };
-    Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
+
+    // TargetUserID chỉ gửi khi không phải TRANSFER về kho
+    if (
+      !(
+        typeCode === "TRANSFER" &&
+        mode === TRANSFER_MODE.WAREHOUSE
+      ) &&
+      values.TargetUserID
+    ) {
+      payload.TargetUserID = Number(values.TargetUserID);
+    }
+
+    // Gửi thêm mode để backend có thể phân nhánh sau này (nếu cần)
+    if (typeCode === "TRANSFER") {
+      payload.TransferMode = mode;
+    }
+
+    Object.keys(payload).forEach(
+      (k) => payload[k] === undefined && delete payload[k]
+    );
 
     setSubmitting(true);
     try {
@@ -394,8 +582,11 @@ export default function RequestCreatePage() {
       const rid = resp?.data?.data?.RequestID;
       message.success(resp?.data?.message || "Tạo yêu cầu thành công");
       if (rid) message.info(`RequestID: ${rid}`);
-      form.resetFields(["AssetID","Quantity","IssueDescription","Reason","WarrantyProvider","Note","TargetUserID","TargetDepartmentID"]);
-      setAssetDetail(null);
+
+      form.resetFields();
+      form.setFieldValue("type", typeCode);
+      form.setFieldValue("transferMode", TRANSFER_MODE.USER);
+      setSelectedAssetIds([]);
     } catch (e) {
       message.error(e?.response?.data?.message || "Không tạo được yêu cầu");
     } finally {
@@ -404,37 +595,98 @@ export default function RequestCreatePage() {
   };
 
   return (
-    <div style={{ maxWidth: 880, margin: "0 auto" }}>
+    <div style={{ maxWidth: 1100, margin: "0 auto" }}>
       {/* HEADER */}
-      <Card size="small" bodyStyle={{ padding:10 }} style={{ borderRadius:10, marginBottom:12 }}>
+      <Card
+        size="small"
+        bodyStyle={{ padding: 10 }}
+        style={{ borderRadius: 10, marginBottom: 12 }}
+      >
         <Space wrap>
-          <Title level={5} style={{ margin:0 }}>Tạo yêu cầu</Title>
+          <Title level={5} style={{ margin: 0 }}>
+            Tạo yêu cầu
+          </Title>
           <Divider type="vertical" />
-          <Tag>Người tạo: <b>{currentUser?.FullName || currentUser?.Email || currentUser?.UserID || "-"}</b></Tag>
-          <Tag>Role: <b>{currentUser?.Role || "-"}</b></Tag>
+          <Tag>
+            Người tạo:{" "}
+            <b>
+              {currentUser?.FullName ||
+                currentUser?.Email ||
+                currentUser?.UserID ||
+                "-"}
+            </b>
+          </Tag>
+          <Tag>
+            Role: <b>{currentUser?.Role || "-"}</b>
+          </Tag>
           <Tooltip title="Tải lại danh sách thiết bị">
-            <Button size="small" icon={<ReloadOutlined />} onClick={fetchAssets} loading={loadingAssets}>
+            <Button
+              size="small"
+              icon={<ReloadOutlined />}
+              onClick={fetchAssets}
+              loading={loadingAssets}
+            >
               Reload assets
             </Button>
           </Tooltip>
+
+          {/* Tag hiển thị người nhận nếu có */}
           {watchTargetUserId && (
-            <Tag color="blue">Người nhận: {users.find(u => Number(u.value) === Number(watchTargetUserId))?.label}</Tag>
+            <Tag color="blue">
+              Người nhận:{" "}
+              {
+                users.find(
+                  (u) => Number(u.value) === Number(watchTargetUserId)
+                )?.label
+              }
+            </Tag>
           )}
+
           {watchTargetDeptId != null && (
-            <Tag color="geekblue">Phòng ban nhận: {
-              departments.find(d => Number(d.value) === Number(watchTargetDeptId))?.label || watchTargetDeptId
-            }</Tag>
+            <Tag color="geekblue">
+              Phòng ban nhận:{" "}
+              {departments.find(
+                (d) => Number(d.value) === Number(watchTargetDeptId)
+              )?.label || watchTargetDeptId}
+            </Tag>
+          )}
+
+          <Tag color="purple">
+            Đã chọn: <b>{selectedAssetIds.length}</b> thiết bị
+          </Tag>
+
+          {type === "TRANSFER" && (
+            <Tag color="magenta">
+              Mode:{" "}
+              <b>
+                {transferMode === TRANSFER_MODE.WAREHOUSE
+                  ? "Chuyển về kho"
+                  : "Chuyển sang người khác"}
+              </b>
+            </Tag>
           )}
         </Space>
       </Card>
 
-      {/* FORM */}
-      <Card size="small" style={{ borderRadius:10 }} bodyStyle={{ padding:14 }}>
+      {/* FORM + TABLE */}
+      <Card
+        size="small"
+        style={{ borderRadius: 10 }}
+        bodyStyle={{ padding: 14 }}
+      >
         <Alert
           type="info"
           showIcon
-          style={{ marginBottom:10 }}
-          message={<Space size={6}><InfoCircleOutlined /><span>Chọn Asset từ danh sách. FE lọc theo trạng thái; khi chọn sẽ kiểm tra thêm bảo hành & request mở.</span></Space>}
+          style={{ marginBottom: 10 }}
+          message={
+            <Space size={6}>
+              <InfoCircleOutlined />
+              <span>
+                Chọn loại yêu cầu & người nhận / kho. Sau đó tick nhiều thiết bị
+                trong bảng bên dưới rồi bấm <b>“Gửi yêu cầu”</b>.
+              </span>
+            </Space>
+          }
         />
 
         <Form
@@ -442,47 +694,48 @@ export default function RequestCreatePage() {
           size="small"
           layout="vertical"
           onFinish={onFinish}
-          initialValues={{ type:"ALLOCATION", Quantity:1 }}
-          onValuesChange={(changed) => {
-            if ("Quantity" in changed) {
-              const v = Number(changed.Quantity || 1);
-              const clamped = clamp(v, 1, Number(maxQty || 1));
-              if (clamped !== v) form.setFieldValue("Quantity", clamped);
-            }
+          initialValues={{
+            type: "ALLOCATION",
+            transferMode: TRANSFER_MODE.USER,
           }}
         >
-          <div style={{ display:"grid", gap:10, gridTemplateColumns:"repeat(auto-fit, minmax(260px, 1fr))" }}>
+          {/* HÀNG 1: Loại + Mode (nếu TRANSFER) + Dept + User */}
+          <div
+            style={{
+              display: "grid",
+              gap: 10,
+              gridTemplateColumns:
+                type === "TRANSFER"
+                  ? "minmax(200px, 1.2fr) minmax(260px, 1.6fr) minmax(220px, 1fr) minmax(220px, 1fr)"
+                  : "minmax(220px, 1fr) minmax(220px, 1fr) minmax(220px, 1fr)",
+              marginBottom: 8,
+            }}
+          >
             <Form.Item
               name="type"
               label="Loại yêu cầu"
-              rules={[{ required:true, message:"Chọn loại yêu cầu" }]}
-              style={{ marginBottom:6 }}
+              rules={[{ required: true, message: "Chọn loại yêu cầu" }]}
             >
               <Select options={REQUEST_TYPES} />
             </Form.Item>
 
-            <Form.Item
-              name="AssetID"
-              label="Thiết bị (Asset)"
-              rules={[{ required:true, message:"Chọn thiết bị" }]}
-              tooltip="Gõ mã quản lý / mã tài sản / serial / tên để tìm nhanh"
-              style={{ marginBottom:6 }}
-            >
-              <Select
-                showSearch
-                placeholder="Tìm & chọn thiết bị…"
-                loading={loadingAssets}
-                options={assetOptions}
-                optionLabelProp="display"
-                filterOption={(input, option) => (option?.searchKey || "").includes(input.toLowerCase())}
-                dropdownMatchSelectWidth={520}
-                allowClear
-              />
-            </Form.Item>
-          </div>
+            {type === "TRANSFER" && (
+              <Form.Item
+                name="transferMode"
+                label="Kiểu chuyển giao"
+                rules={[{ required: true, message: "Chọn kiểu chuyển giao" }]}
+              >
+                <Radio.Group>
+                  <Radio value={TRANSFER_MODE.USER}>
+                    Chuyển sang người khác
+                  </Radio>
+                  <Radio value={TRANSFER_MODE.WAREHOUSE}>
+                    Chuyển về kho
+                  </Radio>
+                </Radio.Group>
+              </Form.Item>
+            )}
 
-          {/* Receiver (bắt buộc CHO MỌI LOẠI) */}
-          <div style={{ display:"grid", gap:10, gridTemplateColumns:"repeat(auto-fit, minmax(260px, 1fr))" }}>
             <Form.Item
               name="TargetDepartmentID"
               label="Phòng ban nhận"
@@ -492,229 +745,154 @@ export default function RequestCreatePage() {
                 showSearch
                 placeholder="Chọn phòng ban…"
                 loading={loadingDepts}
-                options={departments}
+                options={deptOptions}
                 optionFilterProp="label"
-                allowClear
+                disabled={
+                  type === "TRANSFER" &&
+                  transferMode === TRANSFER_MODE.WAREHOUSE
+                }
+                allowClear={
+                  !(
+                    type === "TRANSFER" &&
+                    transferMode === TRANSFER_MODE.WAREHOUSE
+                  )
+                }
               />
             </Form.Item>
 
-            <Form.Item
-              name="TargetUserID"
-              label="Người nhận"
-              rules={[{ required: true, message: "Chọn người nhận" }]}
-              tooltip="Khi chọn phòng ban trước, danh sách người nhận sẽ lọc theo phòng ban đó."
-            >
-              <Select
-                showSearch
-                placeholder="Chọn người nhận…"
-                loading={loadingUsers}
-                options={userOptions}
-                optionFilterProp="label"
-                allowClear
-              />
-            </Form.Item>
+            {(type !== "TRANSFER" ||
+              (type === "TRANSFER" &&
+                transferMode === TRANSFER_MODE.USER)) && (
+              <Form.Item
+                name="TargetUserID"
+                label="Người nhận"
+                rules={
+                  type === "TRANSFER" && transferMode === TRANSFER_MODE.USER
+                    ? [{ required: true, message: "Chọn người nhận" }]
+                    : type !== "TRANSFER"
+                    ? [{ required: true, message: "Chọn người nhận" }]
+                    : []
+                }
+                tooltip="Khi chọn phòng ban trước, danh sách người nhận sẽ lọc theo phòng ban đó."
+              >
+                <Select
+                  showSearch
+                  placeholder="Chọn người nhận…"
+                  loading={loadingUsers}
+                  options={userOptions}
+                  optionFilterProp="label"
+                  allowClear
+                />
+              </Form.Item>
+            )}
           </div>
 
-          {/* Quantity */}
-          <Form.Item
-            name="Quantity"
-            label={`Số lượng (tối đa ${maxQty ?? 1})`}
-            rules={[
-              { required:true, message:"Nhập số lượng" },
-              () => ({
-                validator(_, v){
-                  const val = Number(v || 0);
-                  const mx = Number(maxQty || 1);
-                  if (!val || val < 1) return Promise.reject(new Error("Số lượng ≥ 1"));
-                  if (val > mx)        return Promise.reject(new Error(`Không vượt quá số lượng tồn (${mx})`));
-                  return Promise.resolve();
-                }
-              })
-            ]}
-            style={{ width: 220 }}
-          >
-            <InputNumber min={1} max={maxQty || 1} style={{ width:"100%" }} />
+          {/* LÝ DO CHUNG THEO LOẠI */}
+          {type === "MAINTENANCE" && (
+            <Form.Item
+              name="IssueDescription"
+              label="Mô tả sự cố (áp dụng chung cho tất cả thiết bị)"
+            >
+              <Input.TextArea
+                rows={3}
+                maxLength={500}
+                placeholder="VD: Máy nóng, quạt kêu lớn..."
+              />
+            </Form.Item>
+          )}
+          {type === "DISPOSAL" && (
+            <Form.Item
+              name="Reason"
+              label="Lý do thanh lý (áp dụng chung cho tất cả thiết bị)"
+            >
+              <Input.TextArea
+                rows={3}
+                maxLength={500}
+                placeholder="VD: Không còn sử dụng..."
+              />
+            </Form.Item>
+          )}
+          {type === "WARRANTY" && (
+            <Form.Item
+              name="WarrantyProvider"
+              label="Đơn vị bảo hành (áp dụng chung cho tất cả thiết bị)"
+            >
+              <Input placeholder="VD: TT Bảo hành ABC" />
+            </Form.Item>
+          )}
+
+          <Form.Item name="Note" label="Ghi chú chung cho phiếu">
+            <Input.TextArea
+              rows={3}
+              maxLength={500}
+              placeholder="Ghi chú thêm (tuỳ chọn)"
+            />
           </Form.Item>
 
-          {/* Conditional fields */}
-          <Form.Item
-            name="IssueDescription"
-            label="Mô tả sự cố"
-            hidden={form.getFieldValue("type") !== "MAINTENANCE"}
-            rules={form.getFieldValue("type") === "MAINTENANCE"
-              ? [{ required:true, validator:(_,v)=> (v && String(v).trim().length>=5) ? Promise.resolve() : Promise.reject(new Error("Nhập mô tả sự cố (≥ 5 ký tự)")) }]
-              : []}
-          >
-            <Input.TextArea rows={3} maxLength={500} placeholder="VD: Máy nóng, quạt kêu lớn..." />
-          </Form.Item>
+          <Divider style={{ margin: "8px 0 10px" }} />
 
-          <Form.Item
-            name="Reason"
-            label="Lý do thanh lý"
-            hidden={form.getFieldValue("type") !== "DISPOSAL"}
-            rules={form.getFieldValue("type") === "DISPOSAL"
-              ? [{ required:true, validator:(_,v)=> (v && String(v).trim().length>=3) ? Promise.resolve() : Promise.reject(new Error("Nhập lý do thanh lý (≥ 3 ký tự)")) }]
-              : []}
-          >
-            <Input.TextArea rows={3} maxLength={500} placeholder="VD: Không còn sử dụng..." />
-          </Form.Item>
+          {/* BẢNG CHỌN THIẾT BỊ */}
+          <div style={{ marginBottom: 8 }}>
+            <Space style={{ marginBottom: 6 }}>
+              <Text strong>Chọn thiết bị</Text>
+              <Input
+                placeholder="Tìm theo mã / serial / tên..."
+                allowClear
+                value={assetSearch}
+                onChange={(e) => setAssetSearch(e.target.value)}
+                style={{ width: 260 }}
+              />
+              <Text type="secondary">
+                Tick vào checkbox để chọn nhiều thiết bị.{" "}
+                {type === "TRANSFER" &&
+                  "(Chỉ cho phép chọn thiết bị đang được sử dụng)"}{" "}
+                {type === "WARRANTY" &&
+                  "(Chỉ cho phép chọn thiết bị còn trong thời gian bảo hành)"}
+              </Text>
+            </Space>
 
-          <Form.Item
-            name="WarrantyProvider"
-            label="Đơn vị bảo hành"
-            hidden={form.getFieldValue("type") !== "WARRANTY"}
-            rules={form.getFieldValue("type") === "WARRANTY"
-              ? [{ required:true, message:"Nhập đơn vị bảo hành" }]
-              : []}
-          >
-            <Input placeholder="VD: TT Bảo hành ABC" />
-          </Form.Item>
-
-          <Form.Item name="Note" label="Ghi chú">
-            <Input.TextArea rows={3} maxLength={500} placeholder="Ghi chú thêm (tuỳ chọn)" />
-          </Form.Item>
-
-          <Divider style={{ margin:"8px 0 10px" }} />
+            <Table
+              size="small"
+              rowKey="ID"
+              loading={loadingAssets}
+              dataSource={filteredAssets}
+              columns={assetColumns}
+              pagination={{ pageSize: 8, showSizeChanger: false }}
+              rowSelection={{
+                selectedRowKeys: selectedAssetIds,
+                onChange: setSelectedAssetIds,
+                getCheckboxProps: (record) => ({
+                  disabled: !allowedByTypeLite(type, record),
+                }),
+              }}
+              bordered
+            />
+          </div>
 
           <Space>
-            <Button type="primary" htmlType="submit" icon={<SendOutlined />} loading={submitting} disabled={!currentUser}>
+            <Button
+              type="primary"
+              htmlType="submit"
+              icon={<SendOutlined />}
+              loading={submitting}
+              disabled={!currentUser}
+            >
               Gửi yêu cầu
             </Button>
-            <Button htmlType="button" icon={<RedoOutlined />} onClick={() => { form.resetFields(); setAssetDetail(null); }}>
+            <Button
+              htmlType="button"
+              icon={<RedoOutlined />}
+              onClick={() => {
+                form.resetFields();
+                form.setFieldValue("type", "ALLOCATION");
+                form.setFieldValue("transferMode", TRANSFER_MODE.USER);
+                setSelectedAssetIds([]);
+              }}
+            >
               Xoá form
             </Button>
           </Space>
         </Form>
-      </Card>
-
-      {/* ASSET DETAIL */}
-      <Card
-        size="small"
-        title="Thông tin thiết bị"
-        style={{ borderRadius:10, marginTop:12 }}
-        bodyStyle={{ padding:14 }}
-        extra={
-          <Space>
-            <Tag color={STATUS_COLOR[(assetDetail?.asset?.Status ?? selectedFromList?.Status) || "default"] || "default"}>
-              {STATUS_LABEL[(assetDetail?.asset?.Status ?? selectedFromList?.Status)] || "-"}
-            </Tag>
-            <Badge count={assetDetail?.attributes?.length || 0} title="Số thuộc tính kỹ thuật" />
-          </Space>
-        }
-      >
-        <Spin spinning={loadingDetail}>
-          {!selectedAssetId ? (
-            <Alert type="info" showIcon message="Chưa chọn thiết bị" description="Hãy chọn một thiết bị ở form phía trên để xem chi tiết." />
-          ) : (
-            (() => {
-              const a = assetDetail?.asset || {};
-              const name = a.Name || selectedFromList?.Name || "-";
-              const manage = a.ManageCode || selectedFromList?.ManageCode || a.AssetCode || selectedFromList?.AssetCode || "-";
-              const serial = a.SerialNumber || selectedFromList?.SerialNumber || "-";
-              const qty = a.Quantity ?? selectedFromList?.Quantity ?? "-";
-              const cat = a.CategoryName || "-";
-              const model = a.ItemMasterName || "-";
-              const vendor = a.VendorName || "-";
-              const w = warrantyInfo(a.WarrantyStartDate, a.WarrantyEndDate);
-
-              return (
-                <div style={{ display:"grid", gap:12 }}>
-                  <div style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap" }}>
-                    <Title level={5} style={{ margin:0 }}>{name}</Title>
-                    <Space wrap size={6} style={{ color:"#666" }}>
-                      <Tag>{`Mã: ${manage}`}</Tag>
-                      <Tag>{`Serial: ${serial}`}</Tag>
-                      {a.QRCode ? <Tag icon={<QrcodeOutlined />}>{a.QRCode}</Tag> : null}
-                    </Space>
-                    <div style={{ marginLeft:"auto" }}>
-                      <Text type="secondary">ID:&nbsp;</Text>
-                      <Text code copyable={{ text: a.ID || selectedAssetId }}>
-                        {shortId(a.ID || selectedAssetId)}
-                      </Text>
-                    </div>
-                  </div>
-
-                  <Space wrap>
-                    <Tag color="processing">Loại: {cat}</Tag>
-                    <Tag color="geekblue">Model: {model}</Tag>
-                    <Tag color="purple">Vendor: {vendor}</Tag>
-                    <Tag color="gold">Tồn: {qty}</Tag>
-                    {(a.HasOpenRequest || a.OpenRequestCount > 0) && <Tag color="orange">Có yêu cầu đang mở</Tag>}
-                  </Space>
-
-                  <Divider style={{ margin:"8px 0" }} />
-
-                  {/* 2 cột chính */}
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-                    <Card size="small" bordered bodyStyle={{ padding:12 }}>
-                      <Title level={5} style={{ marginTop:0 }}>Mua hàng</Title>
-                      <div style={{ lineHeight:1.8 }}>
-                        <div><Text type="secondary">PO:&nbsp;</Text>{a.PurchaseId || "-"}</div>
-                        <div><Text type="secondary">Ngày:&nbsp;</Text>{fmtDate(a.PurchaseDate)}</div>
-                        <div><Text type="secondary">Giá:&nbsp;</Text>{fmtMoney(a.PurchasePrice)}</div>
-                      </div>
-                    </Card>
-
-                    <Card size="small" bordered bodyStyle={{ padding:12 }}>
-                      <Title level={5} style={{ marginTop:0 }}>Bảo hành</Title>
-                      <div style={{ lineHeight:1.8, marginBottom:8 }}>
-                        <div><Text type="secondary">Start:&nbsp;</Text>{fmtDate(a.WarrantyStartDate)}</div>
-                        <div><Text type="secondary">End:&nbsp;</Text>{fmtDate(a.WarrantyEndDate)}</div>
-                      </div>
-                      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                        <div style={{ flex:1 }}>
-                          <Progress percent={w.percent} size="small" status={w.active ? "active" : "normal"} />
-                        </div>
-                        {w.active ? <Tag color="green">Còn {w.daysLeft} ngày</Tag> : <Tag>Hết/không BH</Tag>}
-                      </div>
-                      <div style={{ fontSize:12, color:"#999" }}>
-                        Tổng {w.totalDays} ngày • Đã dùng {w.percent}%
-                      </div>
-                    </Card>
-
-                    <Card size="small" bordered bodyStyle={{ padding:12 }}>
-                      <Title level={5} style={{ marginTop:0 }}>Gán hiện tại</Title>
-                      <div style={{ lineHeight:1.8 }}>
-                        <div><Text type="secondary">Nhân viên:&nbsp;</Text>{a.EmployeeName || "-"}</div>
-                        <div><Text type="secondary">Phòng ban:&nbsp;</Text>{a.DepartmentName || "-"}</div>
-                      </div>
-                    </Card>
-
-                    <Card size="small" bordered bodyStyle={{ padding:12 }}>
-                      <Title level={5} style={{ marginTop:0 }}>Thông tin khác</Title>
-                      <div style={{ lineHeight:1.8 }}>
-                        <div><Text type="secondary">CategoryID:&nbsp;</Text>{shortId(a.CategoryID)}</div>
-                        <div><Text type="secondary">ItemMasterID:&nbsp;</Text>{shortId(a.ItemMasterID)}</div>
-                        <div><Text type="secondary">VendorID:&nbsp;</Text>{shortId(a.VendorID)}</div>
-                      </div>
-                    </Card>
-                  </div>
-
-                  {/* Thuộc tính kỹ thuật */}
-                  {Array.isArray(assetDetail?.attributes) && assetDetail.attributes.length > 0 && (
-                    <>
-                      <Title level={5} style={{ margin:0 }}>Thuộc tính kỹ thuật</Title>
-                      <List
-                        grid={{ gutter:8, column:3 }}
-                        dataSource={assetDetail.attributes}
-                        renderItem={(att) => (
-                          <List.Item key={att.ID}>
-                            <Card size="small" bodyStyle={{ padding:"8px 10px" }}>
-                              <div style={{ fontWeight:600 }}>{att.Name}</div>
-                              <div style={{ color:"#555" }}>
-                                {att.Value}{att.Unit ? ` ${att.Unit}` : ""}
-                              </div>
-                            </Card>
-                          </List.Item>
-                        )}
-                      />
-                    </>
-                  )}
-                </div>
-              );
-            })()
-          )}
-        </Spin>
       </Card>
     </div>
   );

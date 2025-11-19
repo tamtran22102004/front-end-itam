@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import {
-  AppstoreOutlined,
-  MailOutlined,
-  DatabaseOutlined,
+  HomeOutlined,
+  DashboardOutlined,
+  AuditOutlined,
+  BarcodeOutlined,
   UserOutlined,
 } from "@ant-design/icons";
 import { Menu, Button, Avatar, Dropdown } from "antd";
@@ -14,42 +15,26 @@ const Header = () => {
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
 
-  // 🔹 Lấy thông tin người dùng từ localStorage
   useEffect(() => {
     try {
       const savedUser = localStorage.getItem("user");
       if (savedUser && savedUser !== "undefined") {
         setUser(JSON.parse(savedUser));
-      } else {
-        setUser(null);
       }
-    } catch (error) {
-      console.error("Lỗi khi parse user:", error);
+    } catch {
       setUser(null);
     }
   }, []);
 
-  // 🔹 Xử lý khi click menu
   const handleMenuClick = (e) => {
     setCurrent(e.key);
-
-    // Nếu key bắt đầu bằng "/", ta điều hướng trực tiếp
     if (e.key.startsWith("/")) {
       navigate(e.key);
       return;
     }
-
-    // Các key đặc biệt khác
-    switch (e.key) {
-      case "home":
-        navigate("/");
-        break;
-      default:
-        break;
-    }
+    if (e.key === "home") navigate("/home");
   };
 
-  // 🔹 Đăng xuất
   const handleLogout = () => {
     localStorage.removeItem("user");
     localStorage.removeItem("token");
@@ -57,12 +42,12 @@ const Header = () => {
     navigate("/login");
   };
 
-  // 🔹 Cấu trúc menu chính
   const menuItems = [
-    { label: "Trang chủ", key: "home", icon: <MailOutlined /> },
+    { label: "Trang chủ", key: "home", icon: <HomeOutlined /> },
+    { label: "Dashboard", key: "/", icon: <DashboardOutlined /> },
     {
       key: "requests",
-      icon: <DatabaseOutlined />,
+      icon: <AuditOutlined />,
       label: "Yêu cầu & Duyệt",
       children: [
         { key: "/request", label: "Yêu cầu" },
@@ -71,13 +56,12 @@ const Header = () => {
     },
     {
       key: "inventory",
-      icon: <AppstoreOutlined />,
+      icon: <BarcodeOutlined />,
       label: "Kiểm kê",
       children: [{ key: "/stocktake", label: "Tạo kiểm kê" }],
     },
   ];
 
-  // 🔹 Menu người dùng
   const userMenu = (
     <Menu
       onClick={({ key }) => {
@@ -93,12 +77,10 @@ const Header = () => {
 
   return (
     <header className="header">
-      {/* Logo */}
       <div className="header-logo" onClick={() => navigate("/")}>
         ITAM
       </div>
 
-      {/* Thanh menu */}
       <Menu
         onClick={handleMenuClick}
         selectedKeys={[current]}
@@ -107,7 +89,6 @@ const Header = () => {
         className="header-menu"
       />
 
-      {/* Người dùng */}
       <div className="header-user">
         {user ? (
           <Dropdown overlay={userMenu} placement="bottomRight" arrow>

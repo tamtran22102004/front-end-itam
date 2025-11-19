@@ -1,21 +1,42 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Card, Table, Tag, Button, Space, Popconfirm, message,
-  Form, Input, DatePicker, Modal, Select, Tooltip, InputNumber
+  Card,
+  Table,
+  Tag,
+  Button,
+  Space,
+  Popconfirm,
+  message,
+  Form,
+  Input,
+  DatePicker,
+  Modal,
+  Select,
+  Tooltip,
+  InputNumber,
 } from "antd";
 import {
-  PlusOutlined, ReloadOutlined, PlayCircleOutlined,
-  CheckCircleOutlined, StopOutlined, UserSwitchOutlined
+  PlusOutlined,
+  ReloadOutlined,
+  PlayCircleOutlined,
+  CheckCircleOutlined,
+  StopOutlined,
+  UserSwitchOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import axios from "axios";
 
 const API_URL = import.meta.env.VITE_BACKEND_URL;
 const ASSETS_API = `${API_URL}/api/asset`;
-const USERS_API = `${API_URL}/api/getuserinfo`;      // <-- dùng endpoint bạn có
-const DEPT_API = `${API_URL}/api/getdepartment`;        // <-- dùng endpoint bạn có
+const USERS_API = `${API_URL}/api/getuserinfo`;
+const DEPT_API = `${API_URL}/api/getdepartment`;
 
-const STATUS_COLORS = { OPEN: "default", IN_PROGRESS: "processing", DONE: "success", CANCELLED: "error" };
+const STATUS_COLORS = {
+  OPEN: "default",
+  IN_PROGRESS: "processing",
+  DONE: "success",
+  CANCELLED: "error",
+};
 
 // ===== Helpers =====
 const pickArray = (res) => {
@@ -100,21 +121,49 @@ const CreateWOForm = ({ onSubmit, assetOptions, usersOptions, me }) => {
 
   return (
     <Form form={form} layout="vertical" onFinish={handleFinish}>
-      <Form.Item label="Asset" name="AssetID" rules={[{ required: true, message: "Chọn Asset" }]}>
-        <Select showSearch allowClear placeholder="Chọn thiết bị" options={assetOptions} optionFilterProp="label" />
+      <Form.Item
+        label="Asset"
+        name="AssetID"
+        rules={[{ required: true, message: "Chọn Asset" }]}
+      >
+        <Select
+          showSearch
+          allowClear
+          placeholder="Chọn thiết bị"
+          options={assetOptions}
+          optionFilterProp="label"
+        />
       </Form.Item>
-      <Form.Item label="ScheduleID (optional)" name="ScheduleID">
-        <InputNumber style={{ width: "100%" }} placeholder="101" />
+
+      {/* dùng ScheduleAssetID theo DB mới */}
+      <Form.Item label="ScheduleAssetID (optional)" name="ScheduleAssetID">
+        <InputNumber style={{ width: "100%" }} placeholder="Ví dụ: 101" />
       </Form.Item>
+
       <Form.Item label="AssignedToUserID" name="AssignedToUserID">
-        <Select showSearch allowClear placeholder="Chọn người phụ trách" options={usersOptions} optionFilterProp="label" />
+        <Select
+          showSearch
+          allowClear
+          placeholder="Chọn người phụ trách"
+          options={usersOptions}
+          optionFilterProp="label"
+        />
       </Form.Item>
       {me?.id && (
-        <Button size="small" style={{ marginTop: -8 }} icon={<UserSwitchOutlined />} onClick={setAssigneeToMe}>
+        <Button
+          size="small"
+          style={{ marginTop: -8 }}
+          icon={<UserSwitchOutlined />}
+          onClick={setAssigneeToMe}
+        >
           Gán cho tôi ({me.fullname})
         </Button>
       )}
-      <Form.Item label="DueDate" name="DueDate" rules={[{ required: true, message: "Chọn DueDate" }]}>
+      <Form.Item
+        label="DueDate"
+        name="DueDate"
+        rules={[{ required: true, message: "Chọn DueDate" }]}
+      >
         <DatePicker style={{ width: "100%" }} />
       </Form.Item>
       <Form.Item label="PlannedStart" name="PlannedStart">
@@ -127,7 +176,9 @@ const CreateWOForm = ({ onSubmit, assetOptions, usersOptions, me }) => {
         <Input.TextArea rows={3} />
       </Form.Item>
       <Space>
-        <Button type="primary" htmlType="submit" icon={<PlusOutlined />}>Create</Button>
+        <Button type="primary" htmlType="submit" icon={<PlusOutlined />}>
+          Create
+        </Button>
       </Space>
     </Form>
   );
@@ -162,28 +213,45 @@ const StartWOForm = ({ onSubmit, usersOptions, deptOptions, userDeptMap, me }) =
 
   return (
     <Form form={form} layout="vertical" onFinish={handleFinish}>
-      <Form.Item label="ReceiverUserID" name="ReceiverUserID" rules={[{ required: true, message: "Chọn người nhận bảo trì" }]}>
+      <Form.Item
+        label="ReceiverUserID"
+        name="ReceiverUserID"
+        rules={[{ required: true, message: "Chọn người nhận bảo trì" }]}
+      >
         <Select
-          showSearch allowClear placeholder="Chọn người nhận"
-          options={usersOptions} optionFilterProp="label"
+          showSearch
+          allowClear
+          placeholder="Chọn người nhận"
+          options={usersOptions}
+          optionFilterProp="label"
           onChange={handleUserChange}
         />
       </Form.Item>
       <Form.Item label="ReceiverDepartmentID" name="ReceiverDepartmentID">
         <Select
-          showSearch allowClear placeholder="Chọn phòng ban nhận"
-          options={deptOptions} optionFilterProp="label"
+          showSearch
+          allowClear
+          placeholder="Chọn phòng ban nhận"
+          options={deptOptions}
+          optionFilterProp="label"
         />
       </Form.Item>
       {me?.id && (
-        <Button size="small" style={{ marginTop: -8, marginBottom: 8 }} icon={<UserSwitchOutlined />} onClick={setReceiverToMe}>
+        <Button
+          size="small"
+          style={{ marginTop: -8, marginBottom: 8 }}
+          icon={<UserSwitchOutlined />}
+          onClick={setReceiverToMe}
+        >
           Gán người nhận = Tôi ({me.fullname})
         </Button>
       )}
       <Form.Item label="PlannedStart (optional)" name="PlannedStart">
         <DatePicker showTime style={{ width: "100%" }} />
       </Form.Item>
-      <Button type="primary" htmlType="submit" icon={<PlayCircleOutlined />}>Start</Button>
+      <Button type="primary" htmlType="submit" icon={<PlayCircleOutlined />}>
+        Start
+      </Button>
     </Form>
   );
 };
@@ -219,26 +287,50 @@ const CompleteWOForm = ({ onSubmit, usersOptions, deptOptions, userDeptMap, me }
     });
 
   return (
-    <Form form={form} layout="vertical" onFinish={handleFinish} initialValues={{ UpdateScheduleNext: true }}>
-      <Form.Item label="ReturnUserID" name="ReturnUserID" rules={[{ required: true, message: "Chọn người nhận về" }]}>
+    <Form
+      form={form}
+      layout="vertical"
+      onFinish={handleFinish}
+      initialValues={{ UpdateScheduleNext: true }}
+    >
+      <Form.Item
+        label="ReturnUserID"
+        name="ReturnUserID"
+        rules={[{ required: true, message: "Chọn người nhận về" }]}
+      >
         <Select
-          showSearch allowClear placeholder="Chọn người nhận về"
-          options={usersOptions} optionFilterProp="label"
+          showSearch
+          allowClear
+          placeholder="Chọn người nhận về"
+          options={usersOptions}
+          optionFilterProp="label"
           onChange={handleUserChange}
         />
       </Form.Item>
       <Form.Item label="ReturnDepartmentID" name="ReturnDepartmentID">
         <Select
-          showSearch allowClear placeholder="Chọn phòng ban nhận về"
-          options={deptOptions} optionFilterProp="label"
+          showSearch
+          allowClear
+          placeholder="Chọn phòng ban nhận về"
+          options={deptOptions}
+          optionFilterProp="label"
         />
       </Form.Item>
       {me?.id && (
-        <Button size="small" style={{ marginTop: -8, marginBottom: 8 }} icon={<UserSwitchOutlined />} onClick={setReturnToMe}>
+        <Button
+          size="small"
+          style={{ marginTop: -8, marginBottom: 8 }}
+          icon={<UserSwitchOutlined />}
+          onClick={setReturnToMe}
+        >
           Gán nhận về = Tôi ({me.fullname})
         </Button>
       )}
-      <Form.Item label="CompletedAt" name="CompletedAt" rules={[{ required: true, message: "Chọn thời điểm hoàn tất" }]}>
+      <Form.Item
+        label="CompletedAt"
+        name="CompletedAt"
+        rules={[{ required: true, message: "Chọn thời điểm hoàn tất" }]}
+      >
         <DatePicker showTime style={{ width: "100%" }} />
       </Form.Item>
       <Form.Item label="ResultNotes" name="ResultNotes">
@@ -248,9 +340,16 @@ const CompleteWOForm = ({ onSubmit, usersOptions, deptOptions, userDeptMap, me }
         <InputNumber min={0} step={1000} style={{ width: "100%" }} />
       </Form.Item>
       <Form.Item label="UpdateScheduleNext" name="UpdateScheduleNext">
-        <Select options={[{ value: true, label: "true" }, { value: false, label: "false" }]} />
+        <Select
+          options={[
+            { value: true, label: "true" },
+            { value: false, label: "false" },
+          ]}
+        />
       </Form.Item>
-      <Button type="primary" htmlType="submit" icon={<CheckCircleOutlined />}>Complete</Button>
+      <Button type="primary" htmlType="submit" icon={<CheckCircleOutlined />}>
+        Complete
+      </Button>
     </Form>
   );
 };
@@ -300,7 +399,6 @@ const WorkOrderPage = () => {
       const deptRes = await axios.get(DEPT_API);
       const depts = pickDepartments(deptRes);
       setDeptOptions(depts);
-
     } catch {
       message.warning("Không load được danh sách phòng ban");
     }
@@ -315,7 +413,8 @@ const WorkOrderPage = () => {
       const deptMap = {};
       users.forEach((u) => {
         map[Number(u.value)] = u.label;
-        if (u?.departmentId != null) deptMap[Number(u.value)] = Number(u.departmentId);
+        if (u?.departmentId != null)
+          deptMap[Number(u.value)] = Number(u.departmentId);
       });
 
       let _me = normalizeUserRecord(getSavedUser());
@@ -327,7 +426,8 @@ const WorkOrderPage = () => {
       }
       setMe(_me);
       if (_me?.id && !map[_me.id]) map[_me.id] = _me.fullname;
-      if (_me?.id && _me.departmentId && !deptMap[_me.id]) deptMap[_me.id] = Number(_me.departmentId);
+      if (_me?.id && _me.departmentId && !deptMap[_me.id])
+        deptMap[_me.id] = Number(_me.departmentId);
 
       setUserMap(map);
       setUserDeptMap(deptMap);
@@ -345,7 +445,10 @@ const WorkOrderPage = () => {
       if (assignee) params.assignee = assignee;
       if (from) params.from = from;
       if (to) params.to = to;
-      const res = await axios.get(`${API_URL}/api/maintenance/workorders`, { params });
+      const res = await axios.get(
+        `${API_URL}/api/maintenance/workorders`,
+        { params }
+      );
       if (res.data?.success) setRows(res.data.data || []);
       else message.error("Không lấy được WorkOrders");
     } catch (e) {
@@ -362,7 +465,10 @@ const WorkOrderPage = () => {
 
   const handleCreate = async (payload) => {
     try {
-      const res = await axios.post(`${API_URL}/api/maintenance/workorders`, payload);
+      const res = await axios.post(
+        `${API_URL}/api/maintenance/workorders`,
+        payload
+      );
       if (res.data?.success) {
         message.success("Tạo WO thành công");
         setOpenCreate(false);
@@ -375,94 +481,261 @@ const WorkOrderPage = () => {
 
   const handleStart = async (workOrderId, payload) => {
     try {
-      const res = await axios.patch(`${API_URL}/api/maintenance/workorders/${workOrderId}/start`, payload);
-      if (res.data?.success) { message.success("Bắt đầu WO"); setStartWOId(null); fetchData(); }
-    } catch (e) { message.error(e?.response?.data?.message || "Lỗi start WO"); }
+      const res = await axios.patch(
+        `${API_URL}/api/maintenance/workorders/${workOrderId}/start`,
+        payload
+      );
+      if (res.data?.success) {
+        message.success("Bắt đầu WO");
+        setStartWOId(null);
+        fetchData();
+      }
+    } catch (e) {
+      message.error(e?.response?.data?.message || "Lỗi start WO");
+    }
   };
 
   const handleComplete = async (workOrderId, payload) => {
     try {
-      const res = await axios.patch(`${API_URL}/api/maintenance/workorders/${workOrderId}/complete`, payload);
-      if (res.data?.success) { message.success("Hoàn tất WO"); setCompleteWOId(null); fetchData(); }
-    } catch (e) { message.error(e?.response?.data?.message || "Lỗi complete WO"); }
+      const res = await axios.patch(
+        `${API_URL}/api/maintenance/workorders/${workOrderId}/complete`,
+        payload
+      );
+      if (res.data?.success) {
+        message.success("Hoàn tất WO");
+        setCompleteWOId(null);
+        fetchData();
+      }
+    } catch (e) {
+      message.error(e?.response?.data?.message || "Lỗi complete WO");
+    }
   };
 
   const handleCancel = async (workOrderId) => {
     try {
-      const res = await axios.patch(`${API_URL}/api/maintenance/workorders/${workOrderId}/cancel`, { Reason: "User cancel" });
-      if (res.data?.success) { message.success("Đã hủy WO"); fetchData(); }
-    } catch (e) { message.error(e?.response?.data?.message || "Lỗi cancel WO"); }
+      const res = await axios.patch(
+        `${API_URL}/api/maintenance/workorders/${workOrderId}/cancel`,
+        { Reason: "User cancel" }
+      );
+      if (res.data?.success) {
+        message.success("Đã hủy WO");
+        fetchData();
+      }
+    } catch (e) {
+      message.error(e?.response?.data?.message || "Lỗi cancel WO");
+    }
   };
 
   const renderUser = (userId) => {
     if (!userId) return "-";
     const name = userMap[Number(userId)];
-    if (me?.id && Number(userId) === Number(me.id)) return `Bạn – ${name || me.fullname}`;
+    if (me?.id && Number(userId) === Number(me.id))
+      return `Bạn – ${name || me.fullname}`;
     return name || String(userId);
   };
   const renderAsset = (assetId) => {
-    const found = assetOptions.find((o) => String(o.value) === String(assetId));
+    const found = assetOptions.find(
+      (o) => String(o.value) === String(assetId)
+    );
     return found ? found.label : assetId;
   };
 
-  const columns = useMemo(() => [
-    { title: "WO#", dataIndex: "WorkOrderID", width: 90 },
-    { title: "ScheduleID", dataIndex: "ScheduleID", width: 100 },
-    { title: "Asset", dataIndex: "AssetID", ellipsis: true, render: renderAsset },
-    { title: "Status", dataIndex: "Status", width: 120, render: v => <Tag color={STATUS_COLORS[v] || "default"}>{v}</Tag> },
-    { title: "DueDate", dataIndex: "DueDate", width: 120, render: v => (v ? dayjs(v).format("YYYY-MM-DD") : "-") },
-    { title: "PlannedStart", dataIndex: "PlannedStart", width: 165, render: v => (v ? dayjs(v).format("YYYY-MM-DD HH:mm") : "-") },
-    { title: "PlannedEnd", dataIndex: "PlannedEnd", width: 165, render: v => (v ? dayjs(v).format("YYYY-MM-DD HH:mm") : "-") },
-    { title: "CompletedAt", dataIndex: "CompletedAt", width: 165, render: v => (v ? dayjs(v).format("YYYY-MM-DD HH:mm") : "-") },
-    { title: "Assignee", dataIndex: "AssignedToUserID", width: 220, render: renderUser },
-    { title: "CreatedBy", dataIndex: "CreatedByUserID", width: 220, render: renderUser },
-    { title: "Cost", dataIndex: "Cost", width: 110, render: v => (v != null ? Number(v).toLocaleString() : "-") },
-    {
-      title: "Actions", key: "actions", fixed: "right", width: 360,
-      render: (_, r) => (
-        <Space wrap onClick={(e)=>e.stopPropagation()}>
-          <Tooltip title="Start (ghi MAINTENANCE_OUT - cần Receiver)">
-            <Button
-              size="small"
-              type="default"
-              icon={<PlayCircleOutlined />}
-              disabled={r.Status !== "OPEN"}
-              onClick={() => setStartWOId(r.WorkOrderID)}
-            >
-              Start
-            </Button>
-          </Tooltip>
-          <Tooltip title="Complete (ghi MAINTENANCE_IN + cập nhật Schedule - cần Return)">
-            <Button
-              size="small"
-              type="primary"
-              icon={<CheckCircleOutlined />}
-              disabled={!(r.Status === "OPEN" || r.Status === "IN_PROGRESS")}
-              onClick={() => setCompleteWOId(r.WorkOrderID)}
-            >
-              Complete
-            </Button>
-          </Tooltip>
-          <Popconfirm
-            title="Hủy work order này?"
-            okText="Yes"
-            cancelText="No"
-            onConfirm={() => handleCancel(r.WorkOrderID)}
-            disabled={!(r.Status === "OPEN" || r.Status === "IN_PROGRESS")}
+  // ===== dept map để hiển thị vị trí =====
+  const deptMap = useMemo(() => {
+    const m = {};
+    (deptOptions || []).forEach((d) => {
+      m[Number(d.value)] = d.label;
+    });
+    return m;
+  }, [deptOptions]);
+
+  // Lấy info chi tiết asset: tên, mã, serial, phòng đang ở
+  const getAssetInfo = (assetId) => {
+    const opt = assetOptions.find(
+      (o) => String(o.value) === String(assetId)
+    );
+    const a = opt?.raw;
+    if (!a) return null;
+
+    const deptId = a.SectionID ?? a.DepartmentID ?? null;
+    const deptName = deptId ? deptMap[Number(deptId)] || "" : "";
+
+    const locationText =
+      a.LocationName ||
+      a.RoomName ||
+      a.Room ||
+      a.AreaName ||
+      deptName ||
+      "";
+
+    return {
+      label: opt.label,
+      manageCode: a.ManageCode || a.AssetCode || "",
+      serial: a.SerialNumber || "",
+      deptName,
+      locationText,
+    };
+  };
+
+  const columns = useMemo(
+    () => [
+      { title: "WO#", dataIndex: "WorkOrderID", width: 90 },
+      {
+        title: "ScheduleAssetID",
+        dataIndex: "ScheduleAssetID",
+        width: 120,
+      },
+      {
+        title: "Asset",
+        dataIndex: "AssetID",
+        ellipsis: true,
+        render: renderAsset,
+      },
+      {
+        title: "Status",
+        dataIndex: "Status",
+        width: 120,
+        render: (v) => (
+          <Tag color={STATUS_COLORS[v] || "default"}>{v}</Tag>
+        ),
+      },
+      {
+        title: "DueDate",
+        dataIndex: "DueDate",
+        width: 120,
+        render: (v) =>
+          v ? dayjs(v).format("YYYY-MM-DD") : "-",
+      },
+      {
+        title: "PlannedStart",
+        dataIndex: "PlannedStart",
+        width: 165,
+        render: (v) =>
+          v ? dayjs(v).format("YYYY-MM-DD HH:mm") : "-",
+      },
+      {
+        title: "PlannedEnd",
+        dataIndex: "PlannedEnd",
+        width: 165,
+        render: (v) =>
+          v ? dayjs(v).format("YYYY-MM-DD HH:mm") : "-",
+      },
+      {
+        title: "CompletedAt",
+        dataIndex: "CompletedAt",
+        width: 165,
+        render: (v) =>
+          v ? dayjs(v).format("YYYY-MM-DD HH:mm") : "-",
+      },
+      {
+        title: "Assignee",
+        dataIndex: "AssignedToUserID",
+        width: 220,
+        render: renderUser,
+      },
+      {
+        title: "CreatedBy",
+        dataIndex: "CreatedByUserID",
+        width: 220,
+        render: renderUser,
+      },
+      {
+        title: "Cost",
+        dataIndex: "Cost",
+        width: 110,
+        render: (v) =>
+          v != null ? Number(v).toLocaleString() : "-",
+      },
+      {
+        title: "Actions",
+        key: "actions",
+        fixed: "right",
+        width: 360,
+        render: (_, r) => (
+          <Space
+            wrap
+            onClick={(e) => e.stopPropagation()}
           >
-            <Button
-              size="small"
-              danger
-              icon={<StopOutlined />}
-              disabled={!(r.Status === "OPEN" || r.Status === "IN_PROGRESS")}
+            <Tooltip title="Start (ghi MAINTENANCE_OUT - cần Receiver)">
+              <Button
+                size="small"
+                type="default"
+                icon={<PlayCircleOutlined />}
+                disabled={r.Status !== "OPEN"}
+                onClick={() =>
+                  setStartWOId(r.WorkOrderID)
+                }
+              >
+                Start
+              </Button>
+            </Tooltip>
+            <Tooltip title="Complete (ghi MAINTENANCE_IN + cập nhật Schedule - cần Return)">
+              <Button
+                size="small"
+                type="primary"
+                icon={<CheckCircleOutlined />}
+                disabled={
+                  !(
+                    r.Status === "OPEN" ||
+                    r.Status === "IN_PROGRESS"
+                  )
+                }
+                onClick={() =>
+                  setCompleteWOId(r.WorkOrderID)
+                }
+              >
+                Complete
+              </Button>
+            </Tooltip>
+            <Popconfirm
+              title="Hủy work order này?"
+              okText="Yes"
+              cancelText="No"
+              onConfirm={() =>
+                handleCancel(r.WorkOrderID)
+              }
+              disabled={
+                !(
+                  r.Status === "OPEN" ||
+                  r.Status === "IN_PROGRESS"
+                )
+              }
             >
-              Cancel
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ], [rows, assetOptions, userMap, me]);
+              <Button
+                size="small"
+                danger
+                icon={<StopOutlined />}
+                disabled={
+                  !(
+                    r.Status === "OPEN" ||
+                    r.Status === "IN_PROGRESS"
+                  )
+                }
+              >
+                Cancel
+              </Button>
+            </Popconfirm>
+          </Space>
+        ),
+      },
+    ],
+    [rows, assetOptions, userMap, me]
+  );
+
+  // Lấy WO hiện tại để show info asset trong modal
+  const currentStartWO = rows.find(
+    (r) => r.WorkOrderID === startWOId
+  );
+  const currentCompleteWO = rows.find(
+    (r) => r.WorkOrderID === completeWOId
+  );
+
+  const startAssetInfo = currentStartWO
+    ? getAssetInfo(currentStartWO.AssetID)
+    : null;
+  const completeAssetInfo = currentCompleteWO
+    ? getAssetInfo(currentCompleteWO.AssetID)
+    : null;
 
   return (
     <Card
@@ -470,12 +743,21 @@ const WorkOrderPage = () => {
       extra={
         <Space wrap>
           <Select
-            showSearch allowClear placeholder="Filter Asset"
-            value={assetFilter} onChange={setAssetFilter} style={{ width: 260 }}
-            options={assetOptions} optionFilterProp="label"
+            showSearch
+            allowClear
+            placeholder="Filter Asset"
+            value={assetFilter}
+            onChange={setAssetFilter}
+            style={{ width: 260 }}
+            options={assetOptions}
+            optionFilterProp="label"
           />
           <Select
-            allowClear placeholder="Status" value={status} onChange={setStatus} style={{ width: 150 }}
+            allowClear
+            placeholder="Status"
+            value={status}
+            onChange={setStatus}
+            style={{ width: 150 }}
             options={[
               { value: "OPEN", label: "OPEN" },
               { value: "IN_PROGRESS", label: "IN_PROGRESS" },
@@ -484,14 +766,44 @@ const WorkOrderPage = () => {
             ]}
           />
           <Select
-            showSearch allowClear placeholder="Assignee"
-            value={assignee} onChange={setAssignee} style={{ width: 220 }}
-            options={usersOptions} optionFilterProp="label"
+            showSearch
+            allowClear
+            placeholder="Assignee"
+            value={assignee}
+            onChange={setAssignee}
+            style={{ width: 220 }}
+            options={usersOptions}
+            optionFilterProp="label"
           />
-          <DatePicker placeholder="From" onChange={(d) => setFrom(d ? d.format("YYYY-MM-DD") : undefined)} />
-          <DatePicker placeholder="To" onChange={(d) => setTo(d ? d.format("YYYY-MM-DD") : undefined)} />
-          <Button icon={<ReloadOutlined />} onClick={fetchData}>Reload</Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpenCreate(true)}>New</Button>
+          <DatePicker
+            placeholder="From"
+            onChange={(d) =>
+              setFrom(
+                d ? d.format("YYYY-MM-DD") : undefined
+              )
+            }
+          />
+          <DatePicker
+            placeholder="To"
+            onChange={(d) =>
+              setTo(
+                d ? d.format("YYYY-MM-DD") : undefined
+              )
+            }
+          />
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={fetchData}
+          >
+            Reload
+          </Button>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setOpenCreate(true)}
+          >
+            New
+          </Button>
         </Space>
       }
     >
@@ -504,6 +816,7 @@ const WorkOrderPage = () => {
         scroll={{ x: 1400 }}
       />
 
+      {/* Modal create */}
       <Modal
         title="Create Work Order"
         open={openCreate}
@@ -519,6 +832,7 @@ const WorkOrderPage = () => {
         />
       </Modal>
 
+      {/* Modal Start WO kèm thông tin tài sản */}
       <Modal
         title={`Start WO #${startWOId || ""}`}
         open={!!startWOId}
@@ -526,8 +840,38 @@ const WorkOrderPage = () => {
         footer={null}
         destroyOnClose
       >
+        {startAssetInfo && (
+          <Card
+            size="small"
+            style={{ marginBottom: 12 }}
+            title="Thông tin tài sản"
+          >
+            <div>
+              <b>Asset:</b> {startAssetInfo.label}
+            </div>
+            {startAssetInfo.manageCode && (
+              <div>
+                <b>Mã quản lý:</b>{" "}
+                {startAssetInfo.manageCode}
+              </div>
+            )}
+            {startAssetInfo.serial && (
+              <div>
+                <b>Serial:</b> {startAssetInfo.serial}
+              </div>
+            )}
+            {startAssetInfo.locationText && (
+              <div>
+                <b>Vị trí hiện tại:</b>{" "}
+                {startAssetInfo.locationText}
+              </div>
+            )}
+          </Card>
+        )}
         <StartWOForm
-          onSubmit={(payload) => handleStart(startWOId, payload)}
+          onSubmit={(payload) =>
+            handleStart(startWOId, payload)
+          }
           usersOptions={usersOptions}
           deptOptions={deptOptions}
           userDeptMap={userDeptMap}
@@ -535,6 +879,7 @@ const WorkOrderPage = () => {
         />
       </Modal>
 
+      {/* Modal Complete WO kèm thông tin tài sản */}
       <Modal
         title={`Complete WO #${completeWOId || ""}`}
         open={!!completeWOId}
@@ -542,8 +887,39 @@ const WorkOrderPage = () => {
         footer={null}
         destroyOnClose
       >
+        {completeAssetInfo && (
+          <Card
+            size="small"
+            style={{ marginBottom: 12 }}
+            title="Thông tin tài sản"
+          >
+            <div>
+              <b>Asset:</b> {completeAssetInfo.label}
+            </div>
+            {completeAssetInfo.manageCode && (
+              <div>
+                <b>Mã quản lý:</b>{" "}
+                {completeAssetInfo.manageCode}
+              </div>
+            )}
+            {completeAssetInfo.serial && (
+              <div>
+                <b>Serial:</b>{" "}
+                {completeAssetInfo.serial}
+              </div>
+            )}
+            {completeAssetInfo.locationText && (
+              <div>
+                <b>Vị trí hiện tại:</b>{" "}
+                {completeAssetInfo.locationText}
+              </div>
+            )}
+          </Card>
+        )}
         <CompleteWOForm
-          onSubmit={(payload) => handleComplete(completeWOId, payload)}
+          onSubmit={(payload) =>
+            handleComplete(completeWOId, payload)
+          }
           usersOptions={usersOptions}
           deptOptions={deptOptions}
           userDeptMap={userDeptMap}

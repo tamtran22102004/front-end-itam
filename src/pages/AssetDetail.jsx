@@ -1,9 +1,8 @@
-// src/pages/AssetDetailPage.jsx
+// src/pages/AssetDetail.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Card,
   Tooltip,
-  Descriptions,
   Table,
   Tag,
   Spin,
@@ -17,8 +16,6 @@ import {
   Select,
   Row,
   Col,
-  Divider,
-  Empty,
   DatePicker,
   InputNumber,
 } from "antd";
@@ -41,9 +38,8 @@ import QrPreviewModal from "../components/assets/QrPreviewModal";
 import { QrcodeOutlined, DownloadOutlined } from "@ant-design/icons";
 
 const { Option } = Select;
-const { Text, Paragraph } = Typography;
+const { Text, Paragraph, Title } = Typography;
 
-// --- JS thuần, KHÔNG TypeScript annotation ---
 const STATUS_MAP = {
   1: ["green", "Sẵn sàng"],
   2: ["blue", "Đang sử dụng"],
@@ -54,8 +50,7 @@ const STATUS_MAP = {
 };
 
 const statusTag = (status) => {
-  const pair = STATUS_MAP[status] || ["default", "Không xác định"];
-  const [color, text] = pair;
+  const [color, text] = STATUS_MAP[status] || ["default", "Không xác định"];
   return <Tag color={color}>{text}</Tag>;
 };
 
@@ -69,7 +64,7 @@ const nullIfEmpty = (v) => {
 };
 
 const AssetDetailPage = () => {
-  const { id } = useParams(); // /asset/detail/:id
+  const { id } = useParams(); // /assetdetail/:id
   const navigate = useNavigate();
   const API_URL = import.meta.env.VITE_BACKEND_URL;
 
@@ -88,7 +83,7 @@ const AssetDetailPage = () => {
   const [allAttributes, setAllAttributes] = useState([]);
   const [attrLoading, setAttrLoading] = useState(false);
 
-  // inline edit config row
+  // inline edit row
   const [editingKey, setEditingKey] = useState(null);
   const [editValue, setEditValue] = useState("");
 
@@ -99,13 +94,13 @@ const AssetDetailPage = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editForm] = Form.useForm();
 
-  // ManageType hiện tại để khóa/ẩn trường phù hợp khi EDIT
+  // ManageType hiện tại
   const [currentManageType, setCurrentManageType] = useState(null);
 
-  const [employees, setEmployees] = useState([]); // mảng { value, label }
+  const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
 
-  // State cho modal xem QR (giống AssetPage)
+  // QR modal
   const [qrState, setQrState] = useState({
     open: false,
     assetId: null,
@@ -114,10 +109,11 @@ const AssetDetailPage = () => {
     title: "",
   });
 
-  // ==== Derived: ManageType theo asset hiện thời ====
   const manageType = useMemo(() => {
     if (!asset || !itemMasters?.length) return null;
-    const im = itemMasters.find((i) => String(i.ID) === String(asset.ItemMasterID));
+    const im = itemMasters.find(
+      (i) => String(i.ID) === String(asset.ItemMasterID)
+    );
     return im?.ManageType || null;
   }, [asset, itemMasters]);
   const isIndividual = manageType === "INDIVIDUAL";
@@ -130,7 +126,13 @@ const AssetDetailPage = () => {
       const resp = await axios.post(
         url,
         {},
-        { headers: { Authorization: `Bearer ${localStorage.getItem("token") || ""}` } }
+        {
+          headers: {
+            Authorization: `Bearer ${
+              localStorage.getItem("token") || ""
+            }`,
+          },
+        }
       );
 
       const { token, pngBase64 } = resp?.data?.data || {};
@@ -144,6 +146,7 @@ const AssetDetailPage = () => {
         title: asset?.Name || asset?.ManageCode || `Asset#${id}`,
       });
     } catch (e) {
+      console.error(e);
       message.error(e?.response?.data?.message || "Không tạo/hiển thị được QR");
     }
   };
@@ -156,12 +159,12 @@ const AssetDetailPage = () => {
       const res = await axios.get(`${API_URL}/api/asset/assetdetail/${id}`);
       if (!res.data?.success || !res.data?.data) {
         message.error(res.data?.message || "Không lấy được chi tiết Asset");
-        setLoading(false);
-        return;
+        setAsset(null);
+      } else {
+        const { asset: a, attributes: attrs } = res.data.data;
+        setAsset(a || null);
+        setAttributes(Array.isArray(attrs) ? attrs : []);
       }
-      const { asset: a, attributes: attrs } = res.data.data;
-      setAsset(a || null);
-      setAttributes(Array.isArray(attrs) ? attrs : []);
     } catch (e) {
       console.error(e);
       message.error("Lỗi khi tải chi tiết Asset");
@@ -174,7 +177,9 @@ const AssetDetailPage = () => {
     try {
       const res = await axios.get(`${API_URL}/api/category`);
       setCategories(res.data?.data || []);
-    } catch {}
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const fetchItemMasters = async () => {
@@ -182,14 +187,18 @@ const AssetDetailPage = () => {
       const res = await axios.get(`${API_URL}/api/items`);
       const data = Array.isArray(res.data) ? res.data : res.data?.data || [];
       setItemMasters(data);
-    } catch {}
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const fetchVendors = async () => {
     try {
       const res = await axios.get(`${API_URL}/api/vendor`);
       setVendors(res.data?.data || []);
-    } catch {}
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const fetchEmployees = async () => {
@@ -240,12 +249,15 @@ const AssetDetailPage = () => {
     fetchVendors();
     fetchEmployees();
     fetchDepartments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   // Mở modal Edit: đổ form + suy ra ManageType
   const openEditModal = () => {
     if (!asset) return;
-    const im = itemMasters.find((i) => String(i.ID) === String(asset.ItemMasterID));
+    const im = itemMasters.find(
+      (i) => String(i.ID) === String(asset.ItemMasterID)
+    );
     const mt = im?.ManageType || null;
     setCurrentManageType(mt);
 
@@ -272,7 +284,6 @@ const AssetDetailPage = () => {
     setIsEditModalOpen(true);
   };
 
-  // Khi đổi ItemMaster trong modal edit
   const onEditIMChange = (val) => {
     const im = itemMasters.find((i) => String(i.ID) === String(val));
     const mt = im?.ManageType || null;
@@ -284,7 +295,6 @@ const AssetDetailPage = () => {
     if (mt === "INDIVIDUAL") {
       editForm.setFieldsValue({ Quantity: 1 });
     } else {
-      // QUANTITY: clear user/department khi chuyển từ INDIVIDUAL sang
       editForm.setFieldsValue({ EmployeeID: null, SectionID: null });
     }
   };
@@ -336,7 +346,9 @@ const AssetDetailPage = () => {
   const handleDeleteConfig = async (ID) => {
     if (!ID) return message.warning("Không tìm thấy ID để xóa.");
     try {
-      const res = await axios.post(`${API_URL}/api/asset/assetconfig/delete/${ID}`);
+      const res = await axios.post(
+        `${API_URL}/api/asset/assetconfig/delete/${ID}`
+      );
       if (res.data?.success) {
         message.success("Xóa cấu hình thành công!");
         await fetchDetail();
@@ -362,8 +374,14 @@ const AssetDetailPage = () => {
         VendorID: nullIfEmpty(values.VendorID),
         PurchaseId: nullIfEmpty(values.PurchaseId),
         QRCode: nullIfEmpty(values.QRCode),
-        EmployeeID: currentManageType === "INDIVIDUAL" ? values.EmployeeID ?? null : null,
-        SectionID: currentManageType === "INDIVIDUAL" ? values.SectionID ?? null : null,
+        EmployeeID:
+          currentManageType === "INDIVIDUAL"
+            ? values.EmployeeID ?? null
+            : null,
+        SectionID:
+          currentManageType === "INDIVIDUAL"
+            ? values.SectionID ?? null
+            : null,
         SerialNumber: nullIfEmpty(values.SerialNumber),
         Quantity:
           currentManageType === "INDIVIDUAL"
@@ -371,19 +389,24 @@ const AssetDetailPage = () => {
             : Math.max(Number(values.Quantity ?? 1), 1),
         Status: values.Status ?? null,
         PurchasePrice:
-          values.PurchasePrice === undefined || values.PurchasePrice === null
+          values.PurchasePrice === undefined ||
+          values.PurchasePrice === null
             ? null
             : Number(values.PurchasePrice),
         PurchaseDate: fmtDate(values.PurchaseDate),
         WarrantyStartDate: fmtDate(values.WarrantyStartDate),
         WarrantyEndDate: fmtDate(values.WarrantyEndDate),
         WarrantyMonth:
-          values.WarrantyMonth === undefined || values.WarrantyMonth === null
+          values.WarrantyMonth === undefined ||
+          values.WarrantyMonth === null
             ? null
             : Number(values.WarrantyMonth),
       };
 
-      const res = await axios.post(`${API_URL}/api/asset/update/${asset.ID}`, payload);
+      const res = await axios.post(
+        `${API_URL}/api/asset/update/${asset.ID}`,
+        payload
+      );
       if (res.data?.success) {
         message.success("Cập nhật thông tin Asset thành công!");
         setIsEditModalOpen(false);
@@ -405,15 +428,18 @@ const AssetDetailPage = () => {
       (r) =>
         r?.Name?.toLowerCase().includes(q) ||
         r?.Value?.toLowerCase().includes(q) ||
-        (typeof r?.Unit === "string" && r.Unit.toLowerCase().includes(q))
+        (typeof r?.Unit === "string" &&
+          r.Unit.toLowerCase().includes(q))
     );
   }, [attributes, search]);
 
-  // ===== columns (refactor) =====
   const copyValue = async (val) => {
     try {
       await navigator.clipboard.writeText(String(val ?? ""));
-    } catch {}
+      message.success("Đã sao chép vào clipboard");
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const columns = [
@@ -443,7 +469,9 @@ const AssetDetailPage = () => {
               placeholder="Nhập giá trị…"
               allowClear
               autoFocus
-              onPressEnter={() => handleUpdateConfig(record.ID, editValue)}
+              onPressEnter={() =>
+                handleUpdateConfig(record.ID, editValue)
+              }
               onKeyDown={(e) => {
                 if (e.key === "Escape") {
                   setEditingKey(null);
@@ -504,7 +532,9 @@ const AssetDetailPage = () => {
                   <Button
                     type="primary"
                     icon={<CheckOutlined />}
-                    onClick={() => handleUpdateConfig(record.ID, editValue)}
+                    onClick={() =>
+                      handleUpdateConfig(record.ID, editValue)
+                    }
                   />
                 </Tooltip>
                 <Tooltip title="Hủy">
@@ -548,7 +578,14 @@ const AssetDetailPage = () => {
   // ===== UI =====
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-[60vh]">
+      <div
+        style={{
+          minHeight: "60vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
         <Spin size="large" tip="Đang tải chi tiết tài sản..." />
       </div>
     );
@@ -556,31 +593,53 @@ const AssetDetailPage = () => {
 
   if (!asset) {
     return (
-      <Card>
-        <Empty description="Không tìm thấy thiết bị" />
-        <div style={{ marginTop: 12 }}>
+      <Card style={{ margin: 16 }}>
+        <Space direction="vertical">
+          <Text type="danger">Không tìm thấy thiết bị.</Text>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>
             Quay lại
           </Button>
-        </div>
+        </Space>
       </Card>
     );
   }
 
+  // Tính toán một chút cho phần tóm tắt
+  const daysLeftWarranty =
+    asset.WarrantyEndDate
+      ? dayjs(asset.WarrantyEndDate).diff(dayjs(), "day")
+      : null;
+
   return (
-    <div className="p-4">
+    <div style={{ padding: 16 }}>
       <Card
+        style={{ borderRadius: 12 }}
+        bodyStyle={{ padding: 16 }}
         title={
-          <Space wrap>
+          <Space align="center" wrap>
             <Button
               icon={<ArrowLeftOutlined />}
               onClick={() => navigate(-1)}
-              style={{ marginRight: 8 }}
             />
-            <span style={{ fontWeight: 700 }}>{asset.Name}</span>
-            <Tag>{asset.ManageCode}</Tag>
-            {statusTag(asset.Status)}
-            {manageType ? <Tag color={isIndividual ? "purple" : "cyan"}>{manageType}</Tag> : null}
+            <div>
+              <Title
+                level={4}
+                style={{ margin: 0, marginBottom: 2 }}
+              >
+                {asset.Name || "Thiết bị không tên"}
+              </Title>
+              <Space size={8} wrap>
+                {asset.ManageCode && (
+                  <Tag color="processing">{asset.ManageCode}</Tag>
+                )}
+                {statusTag(asset.Status)}
+                {manageType && (
+                  <Tag color={isIndividual ? "purple" : "cyan"}>
+                    {manageType}
+                  </Tag>
+                )}
+              </Space>
+            </div>
           </Space>
         }
         extra={
@@ -600,137 +659,311 @@ const AssetDetailPage = () => {
             </Button>
           </Space>
         }
-        style={{ borderRadius: 12 }}
       >
+        {/* Hàng trên: Thông tin chi tiết (to) + Tóm tắt & QR (nhỏ) */}
         <Row gutter={[16, 16]}>
-          <Col xs={24} lg={12}>
-            <Descriptions
-              title="Thông tin chung"
-              bordered
+          <Col xs={24} lg={16}>
+            <Card
+              title="Thông tin chi tiết"
               size="small"
-              column={1}
-              style={{ marginBottom: 16 }}
+              style={{ borderRadius: 10 }}
+              bodyStyle={{ padding: 12 }}
             >
-              <Descriptions.Item label="Tên thiết bị">
-                {asset.Name || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Mã nội bộ">
-                {asset.ManageCode || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Mã kế toán">
-                {asset.AssetCode || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Danh mục">
-                {asset.CategoryName || asset.CategoryID || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label="ItemMaster">
-                {asset.ItemMasterName || asset.ItemMasterID || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Serial">
-                {asset.SerialNumber || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Trạng thái">
-                {statusTag(asset.Status)}
-              </Descriptions.Item>
-              <Descriptions.Item label="Số lượng">
-                {asset.Quantity ?? "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Số lượng còn lại">
-                <Tag color={asset.RemainQuantity > 0 ? "green" : "red"}>
-                  {asset.RemainQuantity ?? 0}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="Mã QR">
+              <Row gutter={[12, 8]}>
+                <Col xs={24} md={12}>
+                  <Text type="secondary">Tên thiết bị</Text>
+                  <div>{asset.Name || "—"}</div>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Text type="secondary">Mã quản lý nội bộ</Text>
+                  <div>{asset.ManageCode || "—"}</div>
+                </Col>
+
+                <Col xs={24} md={12}>
+                  <Text type="secondary">Mã tài sản kế toán</Text>
+                  <div>{asset.AssetCode || "—"}</div>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Text type="secondary">Danh mục</Text>
+                  <div>
+                    {asset.CategoryName || asset.CategoryID || "—"}
+                  </div>
+                </Col>
+
+                <Col xs={24} md={12}>
+                  <Text type="secondary">Item Master</Text>
+                  <div>
+                    {asset.ItemMasterName || asset.ItemMasterID || "—"}
+                  </div>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Text type="secondary">Serial</Text>
+                  <div>{asset.SerialNumber || "—"}</div>
+                </Col>
+
+                <Col xs={24} md={8}>
+                  <Text type="secondary">Số lượng</Text>
+                  <div>{asset.Quantity ?? "—"}</div>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Text type="secondary">Số lượng còn lại</Text>
+                  <div>
+                    <Tag
+                      color={
+                        (asset.RemainQuantity ?? 0) > 0
+                          ? "green"
+                          : "red"
+                      }
+                    >
+                      {asset.RemainQuantity ?? 0}
+                    </Tag>
+                  </div>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Text type="secondary">Trạng thái</Text>
+                  <div>{statusTag(asset.Status)}</div>
+                </Col>
+
+                <Col span={24}>
+                  <div
+                    style={{
+                      borderTop: "1px dashed #f0f0f0",
+                      margin: "8px 0",
+                    }}
+                  />
+                </Col>
+
+                <Col xs={24} md={12}>
+                  <Text type="secondary">Nhà cung cấp</Text>
+                  <div>
+                    {asset.VendorName || asset.VendorID || "—"}
+                  </div>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Text type="secondary">Mã phiếu mua</Text>
+                  <div>{asset.PurchaseId || "—"}</div>
+                </Col>
+
+                <Col xs={24} md={8}>
+                  <Text type="secondary">Ngày mua</Text>
+                  <div>{asset.PurchaseDate || "—"}</div>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Text type="secondary">Giá mua</Text>
+                  <div>
+                    {asset.PurchasePrice != null
+                      ? asset.PurchasePrice
+                      : "—"}
+                  </div>
+                </Col>
+                
+
+                <Col xs={24} md={8}>
+                  <Text type="secondary">BH bắt đầu</Text>
+                  <div>{asset.WarrantyStartDate || "—"}</div>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Text type="secondary">BH kết thúc</Text>
+                  <div>{asset.WarrantyEndDate || "—"}</div>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Text type="secondary">Số tháng BH</Text>
+                  <div>{asset.WarrantyMonth ?? "—"}</div>
+                </Col>
+
+                {isIndividual && (
+                  <>
+                    <Col xs={24} md={12}>
+                      <Text type="secondary">Nhân viên đang sử dụng</Text>
+                      <div>
+                        {asset.EmployeeName || asset.EmployeeID || "—"}
+                      </div>
+                    </Col>
+                    <Col xs={24} md={12}>
+                      <Text type="secondary">Bộ phận / Phòng ban</Text>
+                      <div>
+                        {asset.DepartmentName || asset.SectionID || "—"}
+                      </div>
+                    </Col>
+                  </>
+                )}
+
+                {asset.LastStocktakeAt && (
+                  <>
+                    <Col span={24}>
+                      <div
+                        style={{
+                          borderTop: "1px dashed #f0f0f0",
+                          margin: "8px 0",
+                        }}
+                      />
+                    </Col>
+                    <Col xs={24} md={12}>
+                      <Text type="secondary">
+                        Phiên kiểm kê gần nhất
+                      </Text>
+                      <div>{asset.LastStocktakeSessionID || "—"}</div>
+                    </Col>
+                    <Col xs={24} md={12}>
+                      <Text type="secondary">
+                        Thời điểm kiểm kê gần nhất
+                      </Text>
+                      <div>{asset.LastStocktakeAt || "—"}</div>
+                    </Col>
+                  </>
+                )}
+              </Row>
+            </Card>
+          </Col>
+
+          <Col xs={24} lg={8}>
+            <Card
+              title="Tóm tắt & QR Code"
+              size="small"
+              style={{ borderRadius: 10 }}
+              bodyStyle={{ padding: 12 }}
+            >
+              <div
+                style={{
+                  textAlign: "center",
+                  marginBottom: 12,
+                }}
+              >
+                <div
+                  style={{
+                    display: "inline-block",
+                    padding: 8,
+                    borderRadius: 8,
+                    border: "1px dashed #d9d9d9",
+                    background: "#fafafa",
+                  }}
+                >
+                  <img
+                    src={`${API_URL}/api/qr/${asset.ID}/qr.png`}
+                    alt="QR Code"
+                    style={{ width: 160, height: 160 }}
+                    onError={(e) => {
+                      // Nếu chưa mint QR thì ẩn hình
+                      e.currentTarget.style.display = "none";
+                    }}
+                  />
+                </div>
+              </div>
+              <Space
+                direction="vertical"
+                style={{ width: "100%" }}
+                size={8}
+              >
                 <Space wrap>
-                  <Button size="small" icon={<QrcodeOutlined />} onClick={() => showQr(false)}>
-                    Xem QR
+                  <Button
+                    size="small"
+                    icon={<QrcodeOutlined />}
+                    onClick={() => showQr(false)}
+                  >
+                    Xem lớn / Mint QR
                   </Button>
-                  <a href={`${API_URL}/api/qr/${asset.ID}/qr.png`} target="_blank" rel="noreferrer">
-                    <Button size="small" icon={<DownloadOutlined />}>
+                  <a
+                    href={`${API_URL}/api/qr/${asset.ID}/qr.png`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <Button
+                      size="small"
+                      icon={<DownloadOutlined />}
+                    >
                       Tải PNG
                     </Button>
                   </a>
                 </Space>
-              </Descriptions.Item>
-            </Descriptions>
-          </Col>
 
-          <Col xs={24} lg={12}>
-            <Descriptions
-              title="Mua sắm & Bảo hành"
-              bordered
-              size="small"
-              column={1}
-              style={{ marginBottom: 16 }}
-            >
-              <Descriptions.Item label="Nhà cung cấp">
-                {asset.VendorName || asset.VendorID || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Ngày mua">
-                {asset.PurchaseDate || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Giá mua">
-                {asset.PurchasePrice ?? "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Mã phiếu mua">
-                {asset.PurchaseId || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label="BH bắt đầu">
-                {asset.WarrantyStartDate || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label="BH kết thúc">
-                {asset.WarrantyEndDate || "—"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Số tháng BH">
-                {asset.WarrantyMonth ?? "—"}
-              </Descriptions.Item>
+                <div
+                  style={{
+                    borderTop: "1px dashed #f0f0f0",
+                    margin: "8px 0",
+                  }}
+                />
 
-              {/* ⬇️ Chỉ hiển thị khi INDIVIDUAL */}
-              {isIndividual && (
-                <>
-                  <Descriptions.Item label="Nhân viên">
-                    {asset.EmployeeName || asset.EmployeeID || "—"}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Bộ phận">
-                    {asset.DepartmentName || asset.SectionID || "—"}
-                  </Descriptions.Item>
-                </>
-              )}
-            </Descriptions>
+                <Space
+                  direction="vertical"
+                  size={4}
+                  style={{ width: "100%" }}
+                >
+                  <Text type="secondary">Mã nội bộ</Text>
+                  <Text>{asset.ManageCode || "—"}</Text>
+
+                  <Text type="secondary">Trạng thái</Text>
+                  <div>{statusTag(asset.Status)}</div>
+
+                  {isIndividual && (
+                    <>
+                      <Text type="secondary">Người dùng</Text>
+                      <Text>
+                        {asset.EmployeeName ||
+                          asset.EmployeeID ||
+                          "—"}
+                      </Text>
+                    </>
+                  )}
+
+                  <Text type="secondary">Phòng ban</Text>
+                  <Text>
+                    {asset.DepartmentName ||
+                      asset.SectionName ||
+                      asset.SectionID ||
+                      "—"}
+                  </Text>
+
+                  <Text type="secondary">Bảo hành</Text>
+                  <Text>
+                    {asset.WarrantyEndDate
+                      ? `${asset.WarrantyEndDate} ${
+                          daysLeftWarranty != null
+                            ? daysLeftWarranty >= 0
+                              ? `(còn ~${daysLeftWarranty} ngày)`
+                              : `(quá hạn ${Math.abs(
+                                  daysLeftWarranty
+                                )} ngày)`
+                            : ""
+                        }`
+                      : "—"}
+                  </Text>
+                </Space>
+              </Space>
+            </Card>
           </Col>
         </Row>
 
-        <Divider orientation="left">Thuộc tính kỹ thuật</Divider>
-
-        <div
-          style={{
-            marginBottom: 12,
-            display: "flex",
-            gap: 8,
-            alignItems: "center",
-          }}
+        {/* Thông số kỹ thuật – nhỏ hơn, ưu tiên thấp hơn */}
+        <Card
+          size="small"
+          style={{ marginTop: 16, borderRadius: 10 }}
+          title="Thông số kỹ thuật / Cấu hình chi tiết"
+          extra={
+            <Space>
+              <Input
+                prefix={<SearchOutlined />}
+                placeholder="Tìm theo tên/giá trị/đơn vị…"
+                allowClear
+                style={{ width: 260 }}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <Tag>
+                Tổng: {attributes?.length || 0} | Hiển thị:{" "}
+                {filteredAttributes?.length || 0}
+              </Tag>
+            </Space>
+          }
         >
-          <Input
-            prefix={<SearchOutlined />}
-            placeholder="Tìm theo tên/giá trị/đơn vị…"
-            allowClear
-            style={{ maxWidth: 360 }}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+          <Table
+            dataSource={filteredAttributes || []}
+            rowKey={(r) => r.ID}
+            columns={columns}
+            pagination={{ pageSize: 10 }}
+            bordered
+            size="middle"
           />
-          <Tag>
-            Tổng: {attributes?.length || 0} | Hiển thị: {filteredAttributes?.length || 0}
-          </Tag>
-        </div>
-
-        <Table
-          dataSource={filteredAttributes || []}
-          rowKey={(r) => r.ID}
-          columns={columns}
-          pagination={{ pageSize: 10 }}
-          bordered
-          size="middle"
-        />
+        </Card>
       </Card>
 
       {/* Modal thêm cấu hình */}
@@ -753,28 +986,44 @@ const AssetDetailPage = () => {
               showSearch
               allowClear
               loading={attrLoading}
-              placeholder="Chọn thuộc tính (có thể chọn lại để thêm lần 2)"
+              placeholder="Chọn thuộc tính"
               optionFilterProp="label"
             >
               {(allAttributes || []).map((a) => (
                 <Option key={a.ID} value={a.ID}>
-                  {a.MeasurementUnit ? `${a.Name} (${a.MeasurementUnit})` : a.Name}
+                  {a.MeasurementUnit
+                    ? `${a.Name} (${a.MeasurementUnit})`
+                    : a.Name}
                 </Option>
               ))}
             </Select>
           </Form.Item>
 
-          <Form.Item noStyle shouldUpdate={(prev, curr) => prev.AttributeID !== curr.AttributeID}>
+          <Form.Item
+            noStyle
+            shouldUpdate={(prev, curr) =>
+              prev.AttributeID !== curr.AttributeID
+            }
+          >
             {({ getFieldValue }) => {
               const selId = getFieldValue("AttributeID");
-              const meta = (allAttributes || []).find((x) => x.ID === selId) || {};
-              const unit = meta?.MeasurementUnit || meta?.Unit || undefined;
+              const meta =
+                (allAttributes || []).find((x) => x.ID === selId) ||
+                {};
+              const unit = meta?.MeasurementUnit || meta?.Unit || "";
               const placeholder = meta?.Name
                 ? `Nhập ${meta.Name}${unit ? ` (${unit})` : ""}`
                 : "Nhập giá trị cấu hình";
               return (
-                <Form.Item label="Giá trị" name="Value" rules={[{ required: true, message: "Nhập giá trị!" }]}>
-                  <Input placeholder={placeholder} addonAfter={unit} />
+                <Form.Item
+                  label="Giá trị"
+                  name="Value"
+                  rules={[{ required: true, message: "Nhập giá trị!" }]}
+                >
+                  <Input
+                    placeholder={placeholder}
+                    addonAfter={unit || undefined}
+                  />
                 </Form.Item>
               );
             }}
@@ -801,7 +1050,10 @@ const AssetDetailPage = () => {
                 name="Name"
                 rules={[{ required: true, message: "Nhập tên thiết bị" }]}
               >
-                <Input placeholder="VD: Laptop Dell G5 5700" allowClear />
+                <Input
+                  placeholder="VD: Laptop Dell G5 5700"
+                  allowClear
+                />
               </Form.Item>
             </Col>
 
@@ -809,7 +1061,9 @@ const AssetDetailPage = () => {
               <Form.Item
                 label="Mã quản lý nội bộ"
                 name="ManageCode"
-                rules={[{ required: true, message: "Nhập mã quản lý nội bộ" }]}
+                rules={[
+                  { required: true, message: "Nhập mã quản lý nội bộ" },
+                ]}
               >
                 <Input placeholder="VD: IT-001" allowClear />
               </Form.Item>
@@ -827,7 +1081,12 @@ const AssetDetailPage = () => {
                 name="CategoryID"
                 rules={[{ required: true, message: "Chọn danh mục" }]}
               >
-                <Select showSearch allowClear placeholder="Chọn danh mục" optionFilterProp="children">
+                <Select
+                  showSearch
+                  allowClear
+                  placeholder="Chọn danh mục"
+                  optionFilterProp="children"
+                >
                   {categories.map((c) => (
                     <Option key={c.ID} value={c.ID}>
                       {c.Name}
@@ -838,7 +1097,7 @@ const AssetDetailPage = () => {
             </Col>
 
             <Col span={12}>
-              <Form.Item label="ItemMaster" name="ItemMasterID">
+              <Form.Item label="Item Master" name="ItemMasterID">
                 <Select
                   showSearch
                   allowClear
@@ -854,9 +1113,21 @@ const AssetDetailPage = () => {
                 </Select>
               </Form.Item>
               {currentManageType && (
-                <div style={{ marginTop: -8, marginBottom: 8, opacity: 0.75 }}>
+                <div
+                  style={{
+                    marginTop: -8,
+                    marginBottom: 8,
+                    opacity: 0.75,
+                  }}
+                >
                   Kiểu quản lý:{" "}
-                  <Tag color={currentManageType === "INDIVIDUAL" ? "purple" : "cyan"}>
+                  <Tag
+                    color={
+                      currentManageType === "INDIVIDUAL"
+                        ? "purple"
+                        : "cyan"
+                    }
+                  >
                     {currentManageType}
                   </Tag>
                 </div>
@@ -865,7 +1136,12 @@ const AssetDetailPage = () => {
 
             <Col span={12}>
               <Form.Item label="Nhà cung cấp" name="VendorID">
-                <Select showSearch allowClear placeholder="Chọn Vendor" optionFilterProp="children">
+                <Select
+                  showSearch
+                  allowClear
+                  placeholder="Chọn Vendor"
+                  optionFilterProp="children"
+                >
                   {vendors.map((v) => (
                     <Option key={v.ID} value={v.ID}>
                       {v.Name}
@@ -889,31 +1165,61 @@ const AssetDetailPage = () => {
 
             <Col span={12}>
               <Form.Item label="Ngày mua" name="PurchaseDate">
-                <DatePicker format="YYYY-MM-DD" style={{ width: "100%" }} placeholder="Chọn ngày mua" />
+                <DatePicker
+                  format="YYYY-MM-DD"
+                  style={{ width: "100%" }}
+                  placeholder="Chọn ngày mua"
+                />
               </Form.Item>
             </Col>
 
             <Col span={12}>
               <Form.Item label="Giá mua" name="PurchasePrice">
-                <InputNumber min={0} step={100000} style={{ width: "100%" }} placeholder="VD: 15,000,000" />
+                <InputNumber
+                  min={0}
+                  step={100000}
+                  style={{ width: "100%" }}
+                  placeholder="VD: 15,000,000"
+                />
               </Form.Item>
             </Col>
 
             <Col span={12}>
-              <Form.Item label="Bảo hành bắt đầu" name="WarrantyStartDate">
-                <DatePicker format="YYYY-MM-DD" style={{ width: "100%" }} placeholder="Chọn ngày bắt đầu" />
+              <Form.Item
+                label="Bảo hành bắt đầu"
+                name="WarrantyStartDate"
+              >
+                <DatePicker
+                  format="YYYY-MM-DD"
+                  style={{ width: "100%" }}
+                  placeholder="Chọn ngày bắt đầu"
+                />
               </Form.Item>
             </Col>
 
             <Col span={12}>
-              <Form.Item label="Bảo hành kết thúc" name="WarrantyEndDate">
-                <DatePicker format="YYYY-MM-DD" style={{ width: "100%" }} placeholder="Chọn ngày kết thúc" />
+              <Form.Item
+                label="Bảo hành kết thúc"
+                name="WarrantyEndDate"
+              >
+                <DatePicker
+                  format="YYYY-MM-DD"
+                  style={{ width: "100%" }}
+                  placeholder="Chọn ngày kết thúc"
+                />
               </Form.Item>
             </Col>
 
             <Col span={12}>
-              <Form.Item label="Số tháng bảo hành" name="WarrantyMonth">
-                <InputNumber min={0} style={{ width: "100%" }} placeholder="VD: 12" />
+              <Form.Item
+                label="Số tháng bảo hành"
+                name="WarrantyMonth"
+              >
+                <InputNumber
+                  min={0}
+                  style={{ width: "100%" }}
+                  placeholder="VD: 12"
+                />
               </Form.Item>
             </Col>
 
@@ -923,11 +1229,13 @@ const AssetDetailPage = () => {
               </Form.Item>
             </Col>
 
-            {/* ⬇️ Chỉ render khi INDIVIDUAL */}
             {currentManageType === "INDIVIDUAL" && (
               <>
                 <Col span={12}>
-                  <Form.Item label="Người sử dụng" name="EmployeeID">
+                  <Form.Item
+                    label="Người sử dụng"
+                    name="EmployeeID"
+                  >
                     <Select
                       showSearch
                       allowClear
@@ -963,7 +1271,11 @@ const AssetDetailPage = () => {
             </Col>
 
             <Col span={12}>
-              <Form.Item label="Trạng thái" name="Status" initialValue={1}>
+              <Form.Item
+                label="Trạng thái"
+                name="Status"
+                initialValue={1}
+              >
                 <Select>
                   <Option value={1}>Sẵn sàng</Option>
                   <Option value={2}>Đang dùng</Option>

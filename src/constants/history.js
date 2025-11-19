@@ -4,6 +4,7 @@ export const TYPE_MAP = {
   ALLOCATED: { text: "ALLOCATED", color: "blue" },
   MAINTENANCE: { text: "MAINTENANCE", color: "orange" },
   MAINTENANCE_OUT: { text: "MAINTENANCE_OUT", color: "orange" },
+  MAINTENANCE_IN: { text: "MAINTENANCE_IN", color: "orange" },
   WARRANTY: { text: "WARRANTY", color: "gold" },
   WARRANTY_OUT: { text: "WARRANTY_OUT", color: "gold" },
   DISPOSED: { text: "DISPOSED", color: "red" },

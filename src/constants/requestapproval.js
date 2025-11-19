@@ -1,4 +1,4 @@
-// src/constants/approval.js
+// src/constants/requestapproval.js  (hoặc approval.js tuỳ project của bạn)
 const API_URL = import.meta.env.VITE_BACKEND_URL;
 
 export const STEP_ID_BY_ROLE = { IT: 1, MANAGER: 2 };
@@ -16,6 +16,25 @@ export const APPROVAL_CFG = {
       { label: "Quantity", key: "Quantity" },
     ],
   },
+
+  // 🔹 THÊM TRANSFER Ở ĐÂY
+  transfer: {
+    key: "transfer",
+    label: "Chuyển giao",
+    base: `${API_URL}/api/requesttransfer`,
+    listTitle: "Danh sách yêu cầu chuyển giao",
+    subTitle: "Chi tiết chuyển giao",
+    subCandidates: ["transfer", "request_transfer", "Request_Transfer"],
+    subFields: [
+      { label: "AssetID", key: "AssetID" },
+      { label: "Quantity", key: "Quantity" },
+      // nếu sau này bạn thêm FromUser / ToUser / FromDept / ToDept vào bảng chi tiết
+      // thì chỉ cần thêm key tương ứng ở đây là table hiển thị luôn
+      // { label: "FromUserID", key: "FromUserID" },
+      // { label: "ToUserID", key: "ToUserID" },
+    ],
+  },
+
   maintenance: {
     key: "maintenance",
     label: "Bảo trì",

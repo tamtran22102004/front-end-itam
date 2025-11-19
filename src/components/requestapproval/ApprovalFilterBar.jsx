@@ -12,7 +12,6 @@ export default function ApprovalFilterBar({
   onRefresh,
 }) {
   return (
-    <Card size="small">
       <Space wrap>
         <Select
           style={{ width: 220 }}
@@ -53,9 +52,7 @@ export default function ApprovalFilterBar({
         <Button icon={<ReloadOutlined />} onClick={onRefresh}>
           Làm mới
         </Button>
-        <Tag>Vai trò: <b>{role || "-"}</b></Tag>
-        <Tag>StepID: <b>{stepId ?? "-"}</b></Tag>
+        
       </Space>
-    </Card>
   );
 }
