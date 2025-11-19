@@ -109,6 +109,9 @@ const AssetDetailPage = () => {
     title: "",
   });
 
+  // version để chống cache ảnh QR
+  const [qrVersion, setQrVersion] = useState(0);
+
   const manageType = useMemo(() => {
     if (!asset || !itemMasters?.length) return null;
     const im = itemMasters.find(
@@ -128,9 +131,7 @@ const AssetDetailPage = () => {
         {},
         {
           headers: {
-            Authorization: `Bearer ${
-              localStorage.getItem("token") || ""
-            }`,
+            Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
           },
         }
       );
@@ -148,6 +149,40 @@ const AssetDetailPage = () => {
     } catch (e) {
       console.error(e);
       message.error(e?.response?.data?.message || "Không tạo/hiển thị được QR");
+    }
+  };
+
+  // Tạo lại QR mới hoàn toàn, revoke mã cũ
+  const remintQr = async () => {
+    if (!id) return;
+    try {
+      const resp = await axios.post(
+        `${API_URL}/api/qr/${id}/remint`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+          },
+        }
+      );
+
+      const { token, pngBase64 } = resp?.data?.data || {};
+      if (!token) throw new Error("Re-mint QR không trả về token");
+
+      setQrState({
+        open: true,
+        assetId: id,
+        token,
+        pngBase64: pngBase64 || null,
+        title: asset?.Name || asset?.ManageCode || `Asset#${id}`,
+      });
+
+      // tăng version để ép <img> & link tải reload
+      setQrVersion((v) => v + 1);
+      message.success("Đã tạo mã QR mới cho tài sản");
+    } catch (e) {
+      console.error(e);
+      message.error(e?.response?.data?.message || "Không tạo lại được QR");
     }
   };
 
@@ -389,16 +424,14 @@ const AssetDetailPage = () => {
             : Math.max(Number(values.Quantity ?? 1), 1),
         Status: values.Status ?? null,
         PurchasePrice:
-          values.PurchasePrice === undefined ||
-          values.PurchasePrice === null
+          values.PurchasePrice === undefined || values.PurchasePrice === null
             ? null
             : Number(values.PurchasePrice),
         PurchaseDate: fmtDate(values.PurchaseDate),
         WarrantyStartDate: fmtDate(values.WarrantyStartDate),
         WarrantyEndDate: fmtDate(values.WarrantyEndDate),
         WarrantyMonth:
-          values.WarrantyMonth === undefined ||
-          values.WarrantyMonth === null
+          values.WarrantyMonth === undefined || values.WarrantyMonth === null
             ? null
             : Number(values.WarrantyMonth),
       };
@@ -428,8 +461,7 @@ const AssetDetailPage = () => {
       (r) =>
         r?.Name?.toLowerCase().includes(q) ||
         r?.Value?.toLowerCase().includes(q) ||
-        (typeof r?.Unit === "string" &&
-          r.Unit.toLowerCase().includes(q))
+        (typeof r?.Unit === "string" && r.Unit.toLowerCase().includes(q))
     );
   }, [attributes, search]);
 
@@ -469,9 +501,7 @@ const AssetDetailPage = () => {
               placeholder="Nhập giá trị…"
               allowClear
               autoFocus
-              onPressEnter={() =>
-                handleUpdateConfig(record.ID, editValue)
-              }
+              onPressEnter={() => handleUpdateConfig(record.ID, editValue)}
               onKeyDown={(e) => {
                 if (e.key === "Escape") {
                   setEditingKey(null);
@@ -532,9 +562,7 @@ const AssetDetailPage = () => {
                   <Button
                     type="primary"
                     icon={<CheckOutlined />}
-                    onClick={() =>
-                      handleUpdateConfig(record.ID, editValue)
-                    }
+                    onClick={() => handleUpdateConfig(record.ID, editValue)}
                   />
                 </Tooltip>
                 <Tooltip title="Hủy">
@@ -605,10 +633,9 @@ const AssetDetailPage = () => {
   }
 
   // Tính toán một chút cho phần tóm tắt
-  const daysLeftWarranty =
-    asset.WarrantyEndDate
-      ? dayjs(asset.WarrantyEndDate).diff(dayjs(), "day")
-      : null;
+  const daysLeftWarranty = asset.WarrantyEndDate
+    ? dayjs(asset.WarrantyEndDate).diff(dayjs(), "day")
+    : null;
 
   return (
     <div style={{ padding: 16 }}>
@@ -617,15 +644,9 @@ const AssetDetailPage = () => {
         bodyStyle={{ padding: 16 }}
         title={
           <Space align="center" wrap>
-            <Button
-              icon={<ArrowLeftOutlined />}
-              onClick={() => navigate(-1)}
-            />
+            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)} />
             <div>
-              <Title
-                level={4}
-                style={{ margin: 0, marginBottom: 2 }}
-              >
+              <Title level={4} style={{ margin: 0, marginBottom: 2 }}>
                 {asset.Name || "Thiết bị không tên"}
               </Title>
               <Space size={8} wrap>
@@ -685,9 +706,7 @@ const AssetDetailPage = () => {
                 </Col>
                 <Col xs={24} md={12}>
                   <Text type="secondary">Danh mục</Text>
-                  <div>
-                    {asset.CategoryName || asset.CategoryID || "—"}
-                  </div>
+                  <div>{asset.CategoryName || asset.CategoryID || "—"}</div>
                 </Col>
 
                 <Col xs={24} md={12}>
@@ -709,11 +728,7 @@ const AssetDetailPage = () => {
                   <Text type="secondary">Số lượng còn lại</Text>
                   <div>
                     <Tag
-                      color={
-                        (asset.RemainQuantity ?? 0) > 0
-                          ? "green"
-                          : "red"
-                      }
+                      color={(asset.RemainQuantity ?? 0) > 0 ? "green" : "red"}
                     >
                       {asset.RemainQuantity ?? 0}
                     </Tag>
@@ -735,9 +750,7 @@ const AssetDetailPage = () => {
 
                 <Col xs={24} md={12}>
                   <Text type="secondary">Nhà cung cấp</Text>
-                  <div>
-                    {asset.VendorName || asset.VendorID || "—"}
-                  </div>
+                  <div>{asset.VendorName || asset.VendorID || "—"}</div>
                 </Col>
                 <Col xs={24} md={12}>
                   <Text type="secondary">Mã phiếu mua</Text>
@@ -756,7 +769,6 @@ const AssetDetailPage = () => {
                       : "—"}
                   </div>
                 </Col>
-                
 
                 <Col xs={24} md={8}>
                   <Text type="secondary">BH bắt đầu</Text>
@@ -799,9 +811,7 @@ const AssetDetailPage = () => {
                       />
                     </Col>
                     <Col xs={24} md={12}>
-                      <Text type="secondary">
-                        Phiên kiểm kê gần nhất
-                      </Text>
+                      <Text type="secondary">Phiên kiểm kê gần nhất</Text>
                       <div>{asset.LastStocktakeSessionID || "—"}</div>
                     </Col>
                     <Col xs={24} md={12}>
@@ -839,7 +849,7 @@ const AssetDetailPage = () => {
                   }}
                 >
                   <img
-                    src={`${API_URL}/api/qr/${asset.ID}/qr.png`}
+                    src={`${API_URL}/api/qr/${asset.ID}/qr.png?v=${qrVersion}`}
                     alt="QR Code"
                     style={{ width: 160, height: 160 }}
                     onError={(e) => {
@@ -849,11 +859,7 @@ const AssetDetailPage = () => {
                   />
                 </div>
               </div>
-              <Space
-                direction="vertical"
-                style={{ width: "100%" }}
-                size={8}
-              >
+              <Space direction="vertical" style={{ width: "100%" }} size={8}>
                 <Space wrap>
                   <Button
                     size="small"
@@ -862,18 +868,28 @@ const AssetDetailPage = () => {
                   >
                     Xem lớn / Mint QR
                   </Button>
+
                   <a
-                    href={`${API_URL}/api/qr/${asset.ID}/qr.png`}
+                    href={`${API_URL}/api/qr/${asset.ID}/qr.png?v=${qrVersion}`}
                     target="_blank"
                     rel="noreferrer"
                   >
-                    <Button
-                      size="small"
-                      icon={<DownloadOutlined />}
-                    >
+                    <Button size="small" icon={<DownloadOutlined />}>
                       Tải PNG
                     </Button>
                   </a>
+
+                  <Popconfirm
+                    title="Tạo lại mã QR mới?"
+                    description="Mã QR cũ sẽ không còn sử dụng được nữa."
+                    okText="Đồng ý"
+                    cancelText="Hủy"
+                    onConfirm={remintQr}
+                  >
+                    <Button size="small" danger icon={<ReloadOutlined />}>
+                      Tạo lại QR
+                    </Button>
+                  </Popconfirm>
                 </Space>
 
                 <div
@@ -883,11 +899,7 @@ const AssetDetailPage = () => {
                   }}
                 />
 
-                <Space
-                  direction="vertical"
-                  size={4}
-                  style={{ width: "100%" }}
-                >
+                <Space direction="vertical" size={4} style={{ width: "100%" }}>
                   <Text type="secondary">Mã nội bộ</Text>
                   <Text>{asset.ManageCode || "—"}</Text>
 
@@ -898,9 +910,7 @@ const AssetDetailPage = () => {
                     <>
                       <Text type="secondary">Người dùng</Text>
                       <Text>
-                        {asset.EmployeeName ||
-                          asset.EmployeeID ||
-                          "—"}
+                        {asset.EmployeeName || asset.EmployeeID || "—"}
                       </Text>
                     </>
                   )}
@@ -920,9 +930,7 @@ const AssetDetailPage = () => {
                           daysLeftWarranty != null
                             ? daysLeftWarranty >= 0
                               ? `(còn ~${daysLeftWarranty} ngày)`
-                              : `(quá hạn ${Math.abs(
-                                  daysLeftWarranty
-                                )} ngày)`
+                              : `(quá hạn ${Math.abs(daysLeftWarranty)} ngày)`
                             : ""
                         }`
                       : "—"}
@@ -1001,15 +1009,12 @@ const AssetDetailPage = () => {
 
           <Form.Item
             noStyle
-            shouldUpdate={(prev, curr) =>
-              prev.AttributeID !== curr.AttributeID
-            }
+            shouldUpdate={(prev, curr) => prev.AttributeID !== curr.AttributeID}
           >
             {({ getFieldValue }) => {
               const selId = getFieldValue("AttributeID");
               const meta =
-                (allAttributes || []).find((x) => x.ID === selId) ||
-                {};
+                (allAttributes || []).find((x) => x.ID === selId) || {};
               const unit = meta?.MeasurementUnit || meta?.Unit || "";
               const placeholder = meta?.Name
                 ? `Nhập ${meta.Name}${unit ? ` (${unit})` : ""}`
@@ -1020,10 +1025,7 @@ const AssetDetailPage = () => {
                   name="Value"
                   rules={[{ required: true, message: "Nhập giá trị!" }]}
                 >
-                  <Input
-                    placeholder={placeholder}
-                    addonAfter={unit || undefined}
-                  />
+                  <Input placeholder={placeholder} addonAfter={unit || undefined} />
                 </Form.Item>
               );
             }}
@@ -1050,10 +1052,7 @@ const AssetDetailPage = () => {
                 name="Name"
                 rules={[{ required: true, message: "Nhập tên thiết bị" }]}
               >
-                <Input
-                  placeholder="VD: Laptop Dell G5 5700"
-                  allowClear
-                />
+                <Input placeholder="VD: Laptop Dell G5 5700" allowClear />
               </Form.Item>
             </Col>
 
@@ -1061,9 +1060,7 @@ const AssetDetailPage = () => {
               <Form.Item
                 label="Mã quản lý nội bộ"
                 name="ManageCode"
-                rules={[
-                  { required: true, message: "Nhập mã quản lý nội bộ" },
-                ]}
+                rules={[{ required: true, message: "Nhập mã quản lý nội bộ" }]}
               >
                 <Input placeholder="VD: IT-001" allowClear />
               </Form.Item>
@@ -1123,9 +1120,7 @@ const AssetDetailPage = () => {
                   Kiểu quản lý:{" "}
                   <Tag
                     color={
-                      currentManageType === "INDIVIDUAL"
-                        ? "purple"
-                        : "cyan"
+                      currentManageType === "INDIVIDUAL" ? "purple" : "cyan"
                     }
                   >
                     {currentManageType}
@@ -1185,10 +1180,7 @@ const AssetDetailPage = () => {
             </Col>
 
             <Col span={12}>
-              <Form.Item
-                label="Bảo hành bắt đầu"
-                name="WarrantyStartDate"
-              >
+              <Form.Item label="Bảo hành bắt đầu" name="WarrantyStartDate">
                 <DatePicker
                   format="YYYY-MM-DD"
                   style={{ width: "100%" }}
@@ -1198,10 +1190,7 @@ const AssetDetailPage = () => {
             </Col>
 
             <Col span={12}>
-              <Form.Item
-                label="Bảo hành kết thúc"
-                name="WarrantyEndDate"
-              >
+              <Form.Item label="Bảo hành kết thúc" name="WarrantyEndDate">
                 <DatePicker
                   format="YYYY-MM-DD"
                   style={{ width: "100%" }}
@@ -1211,10 +1200,7 @@ const AssetDetailPage = () => {
             </Col>
 
             <Col span={12}>
-              <Form.Item
-                label="Số tháng bảo hành"
-                name="WarrantyMonth"
-              >
+              <Form.Item label="Số tháng bảo hành" name="WarrantyMonth">
                 <InputNumber
                   min={0}
                   style={{ width: "100%" }}
@@ -1232,10 +1218,7 @@ const AssetDetailPage = () => {
             {currentManageType === "INDIVIDUAL" && (
               <>
                 <Col span={12}>
-                  <Form.Item
-                    label="Người sử dụng"
-                    name="EmployeeID"
-                  >
+                  <Form.Item label="Người sử dụng" name="EmployeeID">
                     <Select
                       showSearch
                       allowClear
@@ -1271,11 +1254,7 @@ const AssetDetailPage = () => {
             </Col>
 
             <Col span={12}>
-              <Form.Item
-                label="Trạng thái"
-                name="Status"
-                initialValue={1}
-              >
+              <Form.Item label="Trạng thái" name="Status" initialValue={1}>
                 <Select>
                   <Option value={1}>Sẵn sàng</Option>
                   <Option value={2}>Đang dùng</Option>
